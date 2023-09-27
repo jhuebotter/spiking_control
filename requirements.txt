@@ -1,0 +1,9 @@
+torch
+celluloid
+wandb
+omegaconf
+gymnasium
+pygame
+tqdm
+ffmpeg-python  # alternatively conda install -c conda-forge ffmpeg
+git+https://github.com/jhuebotter/control_stork
