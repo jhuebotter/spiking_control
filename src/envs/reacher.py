@@ -359,6 +359,31 @@ class ReacherEnv(gym.Env):
             self.isopen = False
 
 
+class ReacherEnvSimple(ReacherEnv):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def stepPhysics(self, action):
+
+        angles = self.state[:2]  # get last joint angles
+        vel = self.state[2:]  # get last joint velocity
+
+        # get change in state since last update
+        dadt = vel
+
+        # update state
+        angles += dadt * self.dt
+        vel = action * self.max_vel
+
+        # clip velocity in allowed limits
+        vel = np.clip(vel, self.min_vel, self.max_vel)
+
+        # avoid very small velocity residues that bounce due to dampening
+        vel[np.abs(vel) < 0.01 * self.max_vel] = 0.0
+
+        return np.hstack([angles, vel])
+
+
 if __name__ == '__main__':
     env = ReacherEnv(seed=4, show_target_arm=True, fully_observable=False)
     target = np.array([0.75, 0.75, 0.2, 0.2])

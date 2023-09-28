@@ -344,8 +344,8 @@ class TwoDPlaneEnv(gym.Env):
 
 
 class TwoDPlaneEnvSimple(TwoDPlaneEnv):
-    def __init__(self, seed: int = None, **kwargs):
-        super(TwoDPlaneEnvSimple, self).__init__(seed, **kwargs)
+    def __init__(self, **kwargs):
+        super(TwoDPlaneEnvSimple, self).__init__(**kwargs)
         self.force_mag = 1.0
 
     def stepPhysics(self, action):
@@ -356,7 +356,7 @@ class TwoDPlaneEnvSimple(TwoDPlaneEnv):
         dpdt = vel  # get change in position since last update
 
         pos += dpdt * self.dt  # update position
-        vel = action * self.force_mag  # update velocity
+        vel = action * self.max_vel  # update velocity
 
         # clip velocity in allowed limits
         vel = np.clip(vel, self.min_vel, self.max_vel)
