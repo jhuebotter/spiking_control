@@ -15,22 +15,21 @@ BLACK = (0, 0, 0)
 
 class TwoDPlaneEnv(gym.Env):
     def __init__(
-            self, 
-            seed: int = None, 
-            max_episode_steps: int = 200, 
-            render_mode: str = 'human', 
-            moving_target: float = 0.0, 
-            fully_observable: bool = True,
-            angle: float = 0.0, 
-            force_mag: float = 5.0, 
-            dt: float = 0.02,
-            drag: float = 0.0, 
-            **kwargs
-        ):
-
+        self,
+        seed: int = None,
+        max_episode_steps: int = 200,
+        render_mode: str = "human",
+        moving_target: float = 0.0,
+        fully_observable: bool = True,
+        angle: float = 0.0,
+        force_mag: float = 5.0,
+        dt: float = 0.02,
+        drag: float = 0.0,
+        **kwargs
+    ):
         self.metadata = {
-            'render_modes': ['human', 'rgb_array'],
-            'render_fps': int(1./dt)
+            "render_modes": ["human", "rgb_array"],
+            "render_fps": int(1.0 / dt),
         }
 
         self.dt = dt  # seconds between state updates
@@ -55,43 +54,51 @@ class TwoDPlaneEnv(gym.Env):
         self.done_on_target = False
         self.epsilon = 0.05
 
-        self.render_mode=render_mode
+        self.render_mode = render_mode
         self.screen_px = 256
 
-        self.process_noise_std = np.array([0., 0., 0., 0.])
+        self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
         self.observation_noise_std = np.ones(4) * 0.01
 
-        self.gravity = np.array([0., 0.])
+        self.gravity = np.array([0.0, 0.0])
 
         self.action_space = spaces.Box(
-            low=self.min_action,
-            high=self.max_action,
-            shape=(2,)
+            low=self.min_action, high=self.max_action, shape=(2,)
         )
 
         self.fully_observable = fully_observable
         if self.fully_observable:
-            self.observation_space = spaces.Dict({
-                'prop': spaces.Box(
-                    low=np.array([self.min_pos, self.min_pos, self.min_vel, self.min_vel]),
-                    high=np.array([self.max_pos, self.max_pos, self.max_vel, self.max_vel])
-                ),
-                'target': spaces.Box(
-                    low=np.array([self.min_pos, self.min_pos, self.min_vel, self.min_vel]),
-                    high=np.array([self.max_pos, self.max_pos, self.max_vel, self.max_vel])
-                )
-            })
+            self.observation_space = spaces.Dict(
+                {
+                    "prop": spaces.Box(
+                        low=np.array(
+                            [self.min_pos, self.min_pos, self.min_vel, self.min_vel]
+                        ),
+                        high=np.array(
+                            [self.max_pos, self.max_pos, self.max_vel, self.max_vel]
+                        ),
+                    ),
+                    "target": spaces.Box(
+                        low=np.array(
+                            [self.min_pos, self.min_pos, self.min_vel, self.min_vel]
+                        ),
+                        high=np.array(
+                            [self.max_pos, self.max_pos, self.max_vel, self.max_vel]
+                        ),
+                    ),
+                }
+            )
         else:
             self.observation_space = spaces.Box(
                 low=0.0,
                 high=1.0,
                 shape=(self.screen_px, self.screen_px, 3),
-                dtype=np.float32
+                dtype=np.float32,
             )
 
-        self.loss_gain = np.array([1., 1., 0., 0.])
+        self.loss_gain = np.array([1.0, 1.0, 0.0, 0.0])
 
-        self.state_labels = ['pos x', 'pos y', 'vel x', 'vel y']
+        self.state_labels = ["pos x", "pos y", "vel x", "vel y"]
 
         self.seed(seed)
         self.screen = None
@@ -100,14 +107,13 @@ class TwoDPlaneEnv(gym.Env):
 
         self.state = None
         self.target = None
-        self.target_angle = 0.
+        self.target_angle = 0.0
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
     def check_pos_limit(self, x, dx):
-
         if x < self.min_pos:
             x = self.min_pos
             dx = 0.0
@@ -119,24 +125,22 @@ class TwoDPlaneEnv(gym.Env):
 
     def rotate(self, vec, deg):
         rad = deg * np.pi / 180
-        r = np.array([
-            [np.cos(rad), -np.sin(rad)],
-            [np.sin(rad),  np.cos(rad)]
-            ]).T
+        r = np.array([[np.cos(rad), -np.sin(rad)], [np.sin(rad), np.cos(rad)]]).T
         return vec @ r
 
     def stepPhysics(self, action):
-
         pos = self.state[:2]  # get last position
         vel = self.state[2:]  # get last velocity
 
         action = self.rotate(action, self.angle)
-        #print("action in env after rotation", action)
+        # print("action in env after rotation", action)
 
         # get change in state since last update
         dpdt = vel
-        dvdt = action * self.force_mag - self.drag * vel  # + self.gravity - self.drag * vel**2
-        #vel = 0.5**self.dt * vel + dvdt * self.dt
+        dvdt = (
+            action * self.force_mag - self.drag * vel
+        )  # + self.gravity - self.drag * vel**2
+        # vel = 0.5**self.dt * vel + dvdt * self.dt
 
         # update state
         pos += dpdt * self.dt
@@ -152,7 +156,6 @@ class TwoDPlaneEnv(gym.Env):
         return np.hstack([pos, vel])
 
     def stepTarget(self):
-
         pos = self.target[:2]
         vel = self.target[2:]
 
@@ -162,8 +165,10 @@ class TwoDPlaneEnv(gym.Env):
         self.target = np.hstack([pos, vel])
 
     def step(self, action):
-        assert self.action_space.contains(action), \
-            "%r (%s) invalid" % (action, type(action))
+        assert self.action_space.contains(action), "%r (%s) invalid" % (
+            action,
+            type(action),
+        )
 
         # update state
         self.state = np.array(self.stepPhysics(action))
@@ -173,14 +178,22 @@ class TwoDPlaneEnv(gym.Env):
 
         # stop when position reaches edge of state space
         if self.stop_on_edge:
-            self.state[0], self.state[2] = self.check_pos_limit(self.state[0], self.state[2])
-            self.state[1], self.state[3] = self.check_pos_limit(self.state[1], self.state[3])
+            self.state[0], self.state[2] = self.check_pos_limit(
+                self.state[0], self.state[2]
+            )
+            self.state[1], self.state[3] = self.check_pos_limit(
+                self.state[1], self.state[3]
+            )
 
         # check if episode is done
         terminated = False
         truncated = False
         on_target = False
-        if np.allclose(self.state[~np.isnan(self.target)], self.target[~np.isnan(self.target)], atol=self.epsilon):
+        if np.allclose(
+            self.state[~np.isnan(self.target)],
+            self.target[~np.isnan(self.target)],
+            atol=self.epsilon,
+        ):
             on_target = True
             if self.done_on_target:
                 terminated = True
@@ -197,41 +210,52 @@ class TwoDPlaneEnv(gym.Env):
         # make observation
         if self.fully_observable:
             observation = {
-                'prop': np.random.normal(self.state, self.observation_noise_std),
-                'target': np.random.normal(self.target, self.observation_noise_std)
+                "prop": np.random.normal(self.state, self.observation_noise_std),
+                "target": np.random.normal(self.target, self.observation_noise_std),
             }
         else:
-            observation = self.render(mode='rgb_array')
+            observation = self.render(mode="rgb_array")
 
         # calculate reward
-        reward = - np.linalg.norm(self.target[:2] - self.state[:2]) * self.dt
+        reward = -np.linalg.norm(self.target[:2] - self.state[:2]) * self.dt
 
         # additional info
-        info = {'on_target': on_target, 'on_edge': on_edge, 'max_steps': max_steps, 'step': self.episode_step_count}
+        info = {
+            "on_target": on_target,
+            "on_edge": on_edge,
+            "max_steps": max_steps,
+            "step": self.episode_step_count,
+        }
 
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options={}):
         self.episode_step_count = 0
 
-        state = options.get('state', None)
-        target = options.get('target', None)
+        state = options.get("state", None)
+        target = options.get("target", None)
 
         if seed is not None:
             self.seed(seed)
 
         if state is None:
             self.state = np.zeros(4)
-            self.state[:2] = self.np_random.uniform(low=0.8*self.min_pos, high=0.8*self.max_pos, size=(2,))
+            self.state[:2] = self.np_random.uniform(
+                low=0.8 * self.min_pos, high=0.8 * self.max_pos, size=(2,)
+            )
         else:
             self.state = state
 
         if target is None:
             self.target = np.zeros(4)
             if self.random_target:
-                self.target[:2] = self.np_random.uniform(low=0.8*self.min_pos, high=0.8*self.max_pos, size=(2,))
+                self.target[:2] = self.np_random.uniform(
+                    low=0.8 * self.min_pos, high=0.8 * self.max_pos, size=(2,)
+                )
                 if self.np_random.random() < self.moving_target:
-                    self.target[2:] = self.np_random.uniform(low=-0.5, high=0.5, size=(2,))
+                    self.target[2:] = self.np_random.uniform(
+                        low=-0.5, high=0.5, size=(2,)
+                    )
                     self.target_angle = self.np_random.uniform(low=30, high=180)
                     if self.np_random.random() < 0.5:
                         self.target_angle *= -1
@@ -241,26 +265,34 @@ class TwoDPlaneEnv(gym.Env):
         # make observation
         if self.fully_observable:
             observation = {
-                'prop': np.random.normal(self.state, self.observation_noise_std),
-                'target': np.random.normal(self.target, self.observation_noise_std)
+                "prop": np.random.normal(self.state, self.observation_noise_std),
+                "target": np.random.normal(self.target, self.observation_noise_std),
             }
         else:
-            observation = self.render(mode='rgb_array')
+            observation = self.render(mode="rgb_array")
 
         # additional info
         on_target = False
-        if np.allclose(self.state[~np.isnan(self.target)], self.target[~np.isnan(self.target)], atol=self.epsilon):
+        if np.allclose(
+            self.state[~np.isnan(self.target)],
+            self.target[~np.isnan(self.target)],
+            atol=self.epsilon,
+        ):
             on_target = True
         on_edge = False
         if np.min(self.state) <= self.min_pos or np.max(self.state) >= self.max_pos:
             on_edge = True
         max_steps = False
-        info = {'on_target': on_target, 'on_edge': on_edge, 'max_steps': max_steps, 'step': self.episode_step_count}
+        info = {
+            "on_target": on_target,
+            "on_edge": on_edge,
+            "max_steps": max_steps,
+            "step": self.episode_step_count,
+        }
 
         return observation, info
 
     def render(self, mode="human"):
-        
         if mode is None:
             mode = self.render_mode
 
@@ -294,34 +326,55 @@ class TwoDPlaneEnv(gym.Env):
         # draw target and agent
         rad = int(screen_width / 50)
         gfxdraw.filled_circle(
-            self.surf,
-            int(np.rint(tar_x)),
-            int(np.rint(tar_y)),
-            rad,
-            BLUE
+            self.surf, int(np.rint(tar_x)), int(np.rint(tar_y)), rad, BLUE
         )
 
         gfxdraw.filled_circle(
-            self.surf,
-            int(np.rint(pos_x)),
-            int(np.rint(pos_y)),
-            rad,
-            RED
+            self.surf, int(np.rint(pos_x)), int(np.rint(pos_y)), rad, RED
         )
 
         def draw_arrow(screen, colour, start, end, trirad=4, lwidth=3):
             pygame.draw.line(screen, colour, start, end, lwidth)
-            rotation = math.degrees(math.atan2(start[1] - end[1], end[0] - start[0])) + 90
-            pygame.draw.polygon(screen, colour, (
-            (end[0] + trirad * math.sin(math.radians(rotation)), end[1] + trirad * math.cos(math.radians(rotation))), (
-            end[0] + trirad * math.sin(math.radians(rotation - 120)), end[1] + trirad * math.cos(math.radians(rotation - 120))),
-            (end[0] + trirad * math.sin(math.radians(rotation + 120)),
-             end[1] + trirad * math.cos(math.radians(rotation + 120)))))
+            rotation = (
+                math.degrees(math.atan2(start[1] - end[1], end[0] - start[0])) + 90
+            )
+            pygame.draw.polygon(
+                screen,
+                colour,
+                (
+                    (
+                        end[0] + trirad * math.sin(math.radians(rotation)),
+                        end[1] + trirad * math.cos(math.radians(rotation)),
+                    ),
+                    (
+                        end[0] + trirad * math.sin(math.radians(rotation - 120)),
+                        end[1] + trirad * math.cos(math.radians(rotation - 120)),
+                    ),
+                    (
+                        end[0] + trirad * math.sin(math.radians(rotation + 120)),
+                        end[1] + trirad * math.cos(math.radians(rotation + 120)),
+                    ),
+                ),
+            )
 
         if np.any(self.state[2:]):
-            draw_arrow(self.surf, BLACK, (pos_x, pos_y), (pos_x + vel_x, pos_y + vel_y), screen_width//100, screen_width//200)
+            draw_arrow(
+                self.surf,
+                BLACK,
+                (pos_x, pos_y),
+                (pos_x + vel_x, pos_y + vel_y),
+                screen_width // 100,
+                screen_width // 200,
+            )
         if np.any(self.target[2:]):
-            draw_arrow(self.surf, BLACK, (tar_x, tar_y), (tar_x + tar_vel_x, tar_y + tar_vel_y), screen_width//100, screen_width//200)
+            draw_arrow(
+                self.surf,
+                BLACK,
+                (tar_x, tar_y),
+                (tar_x + tar_vel_x, tar_y + tar_vel_y),
+                screen_width // 100,
+                screen_width // 200,
+            )
 
         # update the screen
         self.screen.blit(self.surf, (0, 0))
@@ -330,9 +383,12 @@ class TwoDPlaneEnv(gym.Env):
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
         if mode == "rgb_array":
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
-            ) / 255.0
+            return (
+                np.transpose(
+                    np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
+                )
+                / 255.0
+            )
         else:
             return self.isopen
 
@@ -349,7 +405,6 @@ class TwoDPlaneEnvSimple(TwoDPlaneEnv):
         self.force_mag = 1.0
 
     def stepPhysics(self, action):
-
         pos = self.state[:2]  # get last position
         vel = self.state[2:]  # get last velocity
 
@@ -367,28 +422,27 @@ class TwoDPlaneEnvSimple(TwoDPlaneEnv):
         return np.hstack([pos, vel])
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     env = TwoDPlaneEnv(
         seed=4,
         moving_target=0.0,
         fully_observable=False,
     )
-    target = np.array([0.5, 0.5, 0.0, 0.0])
-    observation, info = env.reset(options={'target': target})
+    target = np.array([0.0, 0.0, 0.0, 0.0])
+    observation, info = env.reset(options={"target": target})
     print(observation)
     print(info)
     env.render()
     for i in range(200):
         a = env.action_space.sample()
         observation, reward, terminated, truncated, info = env.step(a)
-        
+
         print()
-        print('observation', observation)
-        print('reward', reward)
-        print('terminated', terminated)
-        print('truncated', truncated)
-        print('info', info)
+        print("observation", observation)
+        print("reward", reward)
+        print("terminated", terminated)
+        print("truncated", truncated)
+        print("info", info)
 
         env.render()
     env.close()

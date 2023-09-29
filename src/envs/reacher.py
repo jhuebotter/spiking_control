@@ -14,22 +14,20 @@ GRAY = (200, 200, 200)
 
 
 class ReacherEnv(gym.Env):
-
     def __init__(
-            self, 
-            seed: int = None, 
-            max_episode_steps: int = 200, 
-            render_mode: str = 'human', 
-            moving_target: float = 0.0, 
-            fully_observable: bool = True,
-            show_target_arm: bool = False,
-            dt: float = 0.02,
-            **kwargs
-        ):
-
+        self,
+        seed: int = None,
+        max_episode_steps: int = 200,
+        render_mode: str = "human",
+        moving_target: float = 0.0,
+        fully_observable: bool = True,
+        show_target_arm: bool = False,
+        dt: float = 0.02,
+        **kwargs
+    ):
         self.metadata = {
-        'render_modes': ['human', 'rgb_array'],
-        'render_fps': int(1./dt)
+            "render_modes": ["human", "rgb_array"],
+            "render_fps": int(1.0 / dt),
         }
 
         self.dt = dt  # seconds between state updates
@@ -51,42 +49,49 @@ class ReacherEnv(gym.Env):
         self.l2 = 0.4
         self.max_reach = self.l1 + self.l2
 
-        self.render_mode=render_mode
-        self.show_target_arm=show_target_arm
+        self.render_mode = render_mode
+        self.show_target_arm = show_target_arm
         self.screen_px = 256
 
-        self.process_noise_std = np.array([0., 0., 0., 0.])
+        self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
         self.observation_noise_std = np.ones(8) * 0.01
 
         self.action_space = spaces.Box(
-            low=self.min_action,
-            high=self.max_action,
-            shape=(2,)
+            low=self.min_action, high=self.max_action, shape=(2,)
         )
 
         self.fully_observable = fully_observable
         if self.fully_observable:
-            self.observation_space = spaces.Dict({
-                'prop': spaces.Box(
-                    low=np.array([-1.0] * 8),
-                    high=np.array([1.0] * 8)
-                ),
-                'target': spaces.Box(
-                    low=np.array([-1.0] * 2),
-                    high=np.array([1.0] * 2)
-                )
-            })
+            self.observation_space = spaces.Dict(
+                {
+                    "prop": spaces.Box(
+                        low=np.array([-1.0] * 8), high=np.array([1.0] * 8)
+                    ),
+                    "target": spaces.Box(
+                        low=np.array([-1.0] * 2), high=np.array([1.0] * 2)
+                    ),
+                }
+            )
         else:
             self.observation_space = spaces.Box(
                 low=0.0,
                 high=1.0,
                 shape=(self.screen_px, self.screen_px, 3),
-                dtype=np.float32
+                dtype=np.float32,
             )
 
-        self.loss_gain = np.array([1., 1., 0., 0., 0., 0., 0., 0.])
+        self.loss_gain = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        self.state_labels = ['hand x', 'hand y', 'sin alpha', 'cos alpha', 'sin beta', 'cos beta', 'vel alpha', 'vel beta']
+        self.state_labels = [
+            "hand x",
+            "hand y",
+            "sin alpha",
+            "cos alpha",
+            "sin beta",
+            "cos beta",
+            "vel alpha",
+            "vel beta",
+        ]
 
         self.seed(seed)
         self.screen = None
@@ -101,7 +106,6 @@ class ReacherEnv(gym.Env):
         return [seed]
 
     def stepPhysics(self, action):
-
         angles = self.state[:2]  # get last joint angles
         vel = self.state[2:]  # get last joint velocity
 
@@ -121,7 +125,6 @@ class ReacherEnv(gym.Env):
         return np.hstack([angles, vel])
 
     def stepTarget(self):
-
         angles = self.target[:2]  # get last joint angles
         vel = self.target[2:]  # get last joint velocity
 
@@ -141,10 +144,12 @@ class ReacherEnv(gym.Env):
         self.target = np.hstack([angles, vel])
 
     def step(self, action):
-        assert self.action_space.contains(action), \
-            "%r (%s) invalid" % (action, type(action))
+        assert self.action_space.contains(action), "%r (%s) invalid" % (
+            action,
+            type(action),
+        )
 
-        # update state        
+        # update state
         self.state = np.array(self.stepPhysics(action))
         self.state = self.np_random.normal(self.state, self.process_noise_std)
         self.stepTarget()
@@ -168,23 +173,26 @@ class ReacherEnv(gym.Env):
         if self.fully_observable:
             proprio_observation = self.make_observation(self.state)
             observation = {
-                'prop': proprio_observation,
-                'target': target_observation[:2]
+                "prop": proprio_observation,
+                "target": target_observation[:2],
             }
         else:
-            observation = self.render(mode='rgb_array')
+            observation = self.render(mode="rgb_array")
 
         # calculate reward
         ob_rew = self.make_observation(self.state, noise=False)
-        reward = - np.linalg.norm(ob_rew[:2] - target_observation[:2]) * self.dt
-        
+        reward = -np.linalg.norm(ob_rew[:2] - target_observation[:2]) * self.dt
+
         # additional info
-        info = {'on_target': on_target, 'max_steps': max_steps, 'step': self.episode_step_count}
+        info = {
+            "on_target": on_target,
+            "max_steps": max_steps,
+            "step": self.episode_step_count,
+        }
 
         return observation, reward, terminated, truncated, info
 
     def make_observation(self, state, noise=True):
-
         a1 = state[0]
         a2 = state[1]
 
@@ -197,9 +205,18 @@ class ReacherEnv(gym.Env):
         norm_vel1 = state[2] / self.max_vel
         norm_vel2 = state[3] / self.max_vel
 
-        observation = np.array([
-            hand_x, hand_y, np.sin(a1), np.cos(a1), np.sin(a2), np.cos(a2), norm_vel1, norm_vel2
-        ])
+        observation = np.array(
+            [
+                hand_x,
+                hand_y,
+                np.sin(a1),
+                np.cos(a1),
+                np.sin(a2),
+                np.cos(a2),
+                norm_vel1,
+                norm_vel2,
+            ]
+        )
 
         if noise:
             observation = self.np_random.normal(observation, self.observation_noise_std)
@@ -209,8 +226,8 @@ class ReacherEnv(gym.Env):
     def reset(self, seed=None, options={}):
         self.episode_step_count = 0
 
-        state = options.get('state', None)
-        target = options.get('target', None)
+        state = options.get("state", None)
+        target = options.get("target", None)
 
         if seed is not None:
             self.seed(seed)
@@ -218,16 +235,20 @@ class ReacherEnv(gym.Env):
         # state is [theta_1, theta_2, \dot{theta_1}, \dot{theta_2}]
         if state is None:
             self.state = np.zeros(4)
-            self.state[:2] = self.np_random.uniform(low=0.0, high=2*np.pi, size=(2,))
+            self.state[:2] = self.np_random.uniform(low=0.0, high=2 * np.pi, size=(2,))
         else:
             self.state = state
 
         if target is None:
             self.target = np.zeros(4)
             if self.random_target:
-                self.target[:2] = self.np_random.uniform(low=0.0, high=2*np.pi, size=(2,))
+                self.target[:2] = self.np_random.uniform(
+                    low=0.0, high=2 * np.pi, size=(2,)
+                )
                 if self.np_random.uniform() < self.moving_target:
-                    self.target[2:] = self.np_random.uniform(low=0.3*self.min_vel, high=0.3*self.max_vel, size=(2,))
+                    self.target[2:] = self.np_random.uniform(
+                        low=0.3 * self.min_vel, high=0.3 * self.max_vel, size=(2,)
+                    )
             else:
                 self.target[:2] = np.pi, np.pi
 
@@ -237,22 +258,22 @@ class ReacherEnv(gym.Env):
         # make observation
         proprio_observation = self.make_observation(self.state)
         target_observation = self.make_observation(self.target, noise=False)
-        observation = {
-            'proprio': proprio_observation,
-            'target': target_observation[:2]
-        }
+        observation = {"proprio": proprio_observation, "target": target_observation[:2]}
 
         # additional info
         on_target = False
         if np.allclose(self.state[:2], self.target[:2], atol=self.epsilon):
             on_target = True
         max_steps = False
-        info = {'on_target': on_target, 'max_steps': max_steps, 'episode_step_count': self.episode_step_count}
+        info = {
+            "on_target": on_target,
+            "max_steps": max_steps,
+            "episode_step_count": self.episode_step_count,
+        }
 
         return observation, info
-    
-    def render(self, mode=None):
 
+    def render(self, mode=None):
         if mode is None:
             mode = self.render_mode
 
@@ -292,51 +313,47 @@ class ReacherEnv(gym.Env):
         # draw the target
         rad = int(screen_width / 50)
         if self.show_target_arm:
-            pygame.draw.line(self.surf, GRAY, (center_x, center_y), (t1_x, t1_y), int(np.rint(1.2*rad)))
+            pygame.draw.line(
+                self.surf,
+                GRAY,
+                (center_x, center_y),
+                (t1_x, t1_y),
+                int(np.rint(1.2 * rad)),
+            )
             pygame.draw.line(self.surf, GRAY, (t1_x, t1_y), (t2_x, t2_y), rad)
 
             gfxdraw.filled_circle(
-                self.surf,
-                int(np.rint(t1_x)),
-                int(np.rint(t1_y)),
-                rad,
-                GRAY
+                self.surf, int(np.rint(t1_x)), int(np.rint(t1_y)), rad, GRAY
             )
 
         gfxdraw.filled_circle(
-            self.surf,
-            int(np.rint(t2_x)),
-            int(np.rint(t2_y)),
-            rad,
-            BLUE
+            self.surf, int(np.rint(t2_x)), int(np.rint(t2_y)), rad, BLUE
         )
 
         # draw the arm
-        pygame.draw.line(self.surf, BLACK, (center_x, center_y), (p1_x, p1_y), int(np.rint(1.2*rad)))
+        pygame.draw.line(
+            self.surf,
+            BLACK,
+            (center_x, center_y),
+            (p1_x, p1_y),
+            int(np.rint(1.2 * rad)),
+        )
         pygame.draw.line(self.surf, BLACK, (p1_x, p1_y), (p2_x, p2_y), rad)
 
         gfxdraw.filled_circle(
             self.surf,
             int(np.rint(center_x)),
             int(np.rint(center_y)),
-            int(np.rint(1.2*rad)),
-            BLACK
+            int(np.rint(1.2 * rad)),
+            BLACK,
         )
 
         gfxdraw.filled_circle(
-            self.surf,
-            int(np.rint(p1_x)),
-            int(np.rint(p1_y)),
-            rad,
-            BLACK
+            self.surf, int(np.rint(p1_x)), int(np.rint(p1_y)), rad, BLACK
         )
 
         gfxdraw.filled_circle(
-            self.surf,
-            int(np.rint(p2_x)),
-            int(np.rint(p2_y)),
-            rad,
-            RED
+            self.surf, int(np.rint(p2_x)), int(np.rint(p2_y)), rad, RED
         )
 
         # update the screen
@@ -346,9 +363,12 @@ class ReacherEnv(gym.Env):
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
         if mode == "rgb_array":
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
-            ) / 255.0
+            return (
+                np.transpose(
+                    np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
+                )
+                / 255.0
+            )
         else:
             return self.isopen
 
@@ -364,7 +384,6 @@ class ReacherEnvSimple(ReacherEnv):
         super().__init__(**kwargs)
 
     def stepPhysics(self, action):
-
         angles = self.state[:2]  # get last joint angles
         vel = self.state[2:]  # get last joint velocity
 
@@ -384,12 +403,17 @@ class ReacherEnvSimple(ReacherEnv):
         return np.hstack([angles, vel])
 
 
-if __name__ == '__main__':
-    env = ReacherEnv(seed=4, show_target_arm=True, fully_observable=False)
+if __name__ == "__main__":
+
+    env = ReacherEnv(
+        seed=4, 
+        show_target_arm=True, 
+        fully_observable=False
+    )
     target = np.array([0.75, 0.75, 0.2, 0.2])
     target[:2] *= 2 * np.pi
     target[2:] *= env.max_vel
-    observation, info = env.reset(options={'target': target})
+    observation, info = env.reset(options={"target": target})
     print(observation)
     print(info)
     env.render()
@@ -398,15 +422,15 @@ if __name__ == '__main__':
         if i < 100:
             a = np.array([1.0, 1.0], dtype=np.float32)
         else:
-            a = np.array([.0, .0], dtype=np.float32)
+            a = np.array([0.0, 0.0], dtype=np.float32)
         observation, reward, terminated, truncated, info = env.step(a)
 
         print()
-        print('observation', observation)
-        print('reward', reward)
-        print('terminated', terminated)
-        print('truncated', truncated)
-        print('info', info)
+        print("observation", observation)
+        print("reward", reward)
+        print("terminated", terminated)
+        print("truncated", truncated)
+        print("info", info)
 
         env.render()
     env.close()
