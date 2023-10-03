@@ -1,0 +1,8 @@
+type: reacher_simple
+params:
+  max_episode_steps: 200
+  render_mode: rgb_array
+  moving_target: 0.0
+  fully_observable: true
+  show_target_arm: false
+  dt: 0.02

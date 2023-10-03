@@ -55,4 +55,6 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
+# Project
 results/
+outputs/

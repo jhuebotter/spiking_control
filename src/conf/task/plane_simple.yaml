@@ -1,0 +1,9 @@
+type: plane_simple
+params:
+  max_episode_steps: 200
+  render_mode: human
+  moving_target: 0.0
+  fully_observable: true
+  angle: 0.0
+  drag: 0.0
+  dt: 0.02

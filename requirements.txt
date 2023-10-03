@@ -1,7 +1,7 @@
 torch
 celluloid
 wandb
-omegaconf
+hydra-core
 gymnasium
 pygame
 tqdm

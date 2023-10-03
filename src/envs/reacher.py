@@ -268,7 +268,7 @@ class ReacherEnv(gym.Env):
         info = {
             "on_target": on_target,
             "max_steps": max_steps,
-            "episode_step_count": self.episode_step_count,
+            "step": self.episode_step_count,
         }
 
         return observation, info
@@ -380,8 +380,8 @@ class ReacherEnv(gym.Env):
 
 
 class ReacherEnvSimple(ReacherEnv):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def stepPhysics(self, action):
         angles = self.state[:2]  # get last joint angles

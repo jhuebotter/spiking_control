@@ -1,0 +1,9 @@
+defaults:
+  #- policy: snn_policy
+  #- transition: snn_transition
+  - task: plane
+
+policy:
+  num_ff_layers: 5
+
+seed: 42

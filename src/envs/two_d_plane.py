@@ -23,8 +23,8 @@ class TwoDPlaneEnv(gym.Env):
         fully_observable: bool = True,
         angle: float = 0.0,
         force_mag: float = 5.0,
-        dt: float = 0.02,
         drag: float = 0.0,
+        dt: float = 0.02,
         **kwargs
     ):
         self.metadata = {
@@ -400,8 +400,8 @@ class TwoDPlaneEnv(gym.Env):
 
 
 class TwoDPlaneEnvSimple(TwoDPlaneEnv):
-    def __init__(self, **kwargs):
-        super(TwoDPlaneEnvSimple, self).__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super(TwoDPlaneEnvSimple, self).__init__(*args, **kwargs)
         self.force_mag = 1.0
 
     def stepPhysics(self, action):
