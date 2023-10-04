@@ -1,0 +1,12 @@
+defaults:
+  - /ann
+
+model:
+  params:
+    num_rec_layers: 1
+    num_ff_layers: 1
+
+learning:
+  params:
+    autoregressive: False
+    unroll_steps: 1

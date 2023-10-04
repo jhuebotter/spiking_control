@@ -1,0 +1,18 @@
+model:
+  type: prnn
+  params:
+    hidden_dim: 512
+    activation_kwargs:
+      act_fn: lrelu
+
+optim:
+  type: smorms3
+  params:
+    lr: 0.0005
+
+learning:
+  params:
+    batch_size: 512
+    n_batches: 25
+    max_norm: 30
+    warmup_steps: 5

@@ -1,0 +1,13 @@
+defaults:
+  - /ann
+
+model:
+  params:
+    num_rec_layers: 0
+    num_ff_layers: 2
+
+learning:
+  params:
+    unroll_steps: 20
+    deterministic_transition: True
+    beta: 0.0
