@@ -1,9 +1,9 @@
 defaults:
-  #- policy: snn_policy
-  #- transition: snn_transition
-  - task: plane
-
-policy:
-  num_ff_layers: 5
+  - task: reacher
+  - policy: snn_policy
+  - transition: snn_transition
+  - wandb: wandb
+  - _self_
 
 seed: 42
+experiment: default

@@ -1,0 +1,34 @@
+model:
+  type: rsnn
+  params:
+    hidden_dim: 2048
+    connection_dims: 0
+    dt: 0.002
+    repeat_input: 8
+    nu: 100
+    out_style: last
+    lowerBoundL2Strength: 0.0
+    upperBoundL2Strength: 1.0
+    weightL2Strength: 0.0
+    activation_kwargs:
+      act_fn: sigmoidspike
+      beta: 25.0
+      gamma: 1.0
+    flif_kwargs:
+      tau_mem: 0.02
+      tau_syn: 0.01
+      reset: sub
+    readout_kwargs:
+      n_pop: 25
+
+optim:
+  type: smorms3
+  params:
+    lr: 0.0005
+
+learning:
+  params:
+    batch_size: 512
+    n_batches: 25
+    max_norm: 30
+    warmup_steps: 5

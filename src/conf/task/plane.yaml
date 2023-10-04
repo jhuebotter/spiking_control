@@ -1,7 +1,7 @@
 type: plane
 params:
   max_episode_steps: 200
-  render_mode: human
+  render_mode: rgb_array
   moving_target: 0.0
   fully_observable: true
   angle: 0.0
