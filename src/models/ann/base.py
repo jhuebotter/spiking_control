@@ -44,14 +44,19 @@ class BasePRNN(nn.Module):
             layers[f"fc_ff{i + 1}"] = nn.Linear(dim, hidden_dim, bias)
         layers["fc_mu"] = nn.Linear(hidden_dim, output_dim, bias)
         layers["fc_var"] = nn.Linear(hidden_dim, output_dim, bias)
-        self.basis = nn.ModuleDict(layers)
+        self.model = nn.ModuleDict(layers)
 
         # initialize weights
-        nn.init.zeros_(self.basis.fc_mu.bias)
-        nn.init.zeros_(self.basis.fc_var.bias)
+        nn.init.zeros_(self.model.fc_mu.bias)
+        nn.init.zeros_(self.model.fc_var.bias)
 
         # initialize hidden state
         self.h = None
+
+        self.optimizer = None
+
+    def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
+        self.optimizer = optimizer
 
     def reset_state(self) -> None:
         self.h = None
@@ -70,18 +75,18 @@ class BasePRNN(nn.Module):
         if self.num_rec_layers:
             # pytorch GRU expects input of shape (T, N, D)
             if len(x.shape) == 2:
-                x.unsqueeze_(0)
+                x = x.unsqueeze(0)
         else:
             # pytorch linear expects input of shape (N, D)
             if len(x.shape) == 3:
-                x.squeeze_(0)
+                x = x.squeeze(0)
 
         return x
 
     def to(self, device: Union[str, torch.device]) -> None:
         """move model to device and update device attribute"""
         self.device = device
-        self.basis.to(device)
+        self.model.to(device)
         super().to(device)
         return self
 
@@ -100,15 +105,15 @@ class BasePRNN(nn.Module):
         """forward pass of the model"""
         x = torch.cat([self.prepare_input(i) for i in args], -1)
 
-        for name, layer in self.basis.items():
+        for name, layer in self.model.items():
             if "gru" in name.lower():
                 x, self.h = layer(x)
                 x = self.act_fn(x)
             elif "fc_ff" in name.lower():
                 x = self.act_fn(layer(x))
 
-        mu = self.basis["fc_mu"](x)
-        logvar = self.basis["fc_var"](x)
+        mu = self.model["fc_mu"](x)
+        logvar = self.model["fc_var"](x)
 
         return torch.tanh(mu), logvar
 

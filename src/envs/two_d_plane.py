@@ -70,7 +70,7 @@ class TwoDPlaneEnv(gym.Env):
         if self.fully_observable:
             self.observation_space = spaces.Dict(
                 {
-                    "prop": spaces.Box(
+                    "proprio": spaces.Box(
                         low=np.array(
                             [self.min_pos, self.min_pos, self.min_vel, self.min_vel]
                         ),
@@ -210,7 +210,7 @@ class TwoDPlaneEnv(gym.Env):
         # make observation
         if self.fully_observable:
             observation = {
-                "prop": np.random.normal(self.state, self.observation_noise_std),
+                "propprio": np.random.normal(self.state, self.observation_noise_std),
                 "target": np.random.normal(self.target, self.observation_noise_std),
             }
         else:
@@ -265,7 +265,7 @@ class TwoDPlaneEnv(gym.Env):
         # make observation
         if self.fully_observable:
             observation = {
-                "prop": np.random.normal(self.state, self.observation_noise_std),
+                "proprio": np.random.normal(self.state, self.observation_noise_std),
                 "target": np.random.normal(self.target, self.observation_noise_std),
             }
         else:

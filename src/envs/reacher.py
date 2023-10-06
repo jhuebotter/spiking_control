@@ -64,7 +64,7 @@ class ReacherEnv(gym.Env):
         if self.fully_observable:
             self.observation_space = spaces.Dict(
                 {
-                    "prop": spaces.Box(
+                    "proprio": spaces.Box(
                         low=np.array([-1.0] * 8), high=np.array([1.0] * 8)
                     ),
                     "target": spaces.Box(
@@ -80,8 +80,6 @@ class ReacherEnv(gym.Env):
                 dtype=np.float32,
             )
 
-        self.loss_gain = np.array([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
         self.state_labels = [
             "hand x",
             "hand y",
@@ -92,6 +90,16 @@ class ReacherEnv(gym.Env):
             "vel alpha",
             "vel beta",
         ]
+
+        self.target_labels = [
+            "hand x",
+            "hand y",
+        ]
+
+        self.loss_gain = {
+            'gain': np.array([1.0, 1.0]),
+            'use': np.array([True, True, False, False, False, False, False, False])
+        }
 
         self.seed(seed)
         self.screen = None
@@ -104,6 +112,9 @@ class ReacherEnv(gym.Env):
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
+    
+    def get_loss_gain(self):
+        return self.loss_gain
 
     def stepPhysics(self, action):
         angles = self.state[:2]  # get last joint angles
@@ -173,7 +184,7 @@ class ReacherEnv(gym.Env):
         if self.fully_observable:
             proprio_observation = self.make_observation(self.state)
             observation = {
-                "prop": proprio_observation,
+                "proprio": proprio_observation,
                 "target": target_observation[:2],
             }
         else:

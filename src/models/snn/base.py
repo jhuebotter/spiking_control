@@ -78,6 +78,7 @@ class BaseRSNN(torch.nn.Module):
         self.nu = nu
         self.name = name
 
+        readout_kwargs = dict(**readout_kwargs)
         readout_kwargs["n_readouts"] = readout_kwargs.get("n_pop", 1)
         readout_kwargs["store_sequences"] = ["out"]
 
@@ -137,15 +138,15 @@ class BaseRSNN(torch.nn.Module):
             readout_kwargs["I_tau_mean"] = 2e-3
 
         # make the model
-        self.basis = RecurrentSpikingModel(device=device, dtype=dtype)
-        input_group = prev = self.basis.add_group(
+        self.model = RecurrentSpikingModel(device=device, dtype=dtype)
+        input_group = prev = self.model.add_group(
             InputGroup(self.input_dim, name=f"{self.name} Input Group")
         )
         first = True
         for i in range(num_rec_layers):
             new = Layer(
                 name=f"{self.name} Recurrent LIF Cell Group {i+1}",
-                model=self.basis,
+                model=self.model,
                 size=self.hidden_dim,
                 input_group=prev,
                 recurrent=True,
@@ -160,7 +161,7 @@ class BaseRSNN(torch.nn.Module):
             )
             first = False
             initializer.initialize(new)
-            self.basis.add_monitor(
+            self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
                     "out",
@@ -168,7 +169,7 @@ class BaseRSNN(torch.nn.Module):
                     title=f"{self.name} Recurrent LIF Cell Group {i+1}",
                 )
             )
-            self.basis.add_monitor(
+            self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
                     "mem",
@@ -176,16 +177,16 @@ class BaseRSNN(torch.nn.Module):
                     title=f"{self.name} Recurrent LIF Cell Group {i+1}",
                 )
             )
-            self.basis.add_monitor(
+            self.model.add_monitor(
                 PopulationSpikeCountMonitor(new.output_group, avg=True)
             )
-            self.basis.add_monitor(ActiveNeuronMonitor(new.output_group))
+            self.model.add_monitor(ActiveNeuronMonitor(new.output_group))
 
             prev = new.output_group
         for i in range(num_ff_layers):
             new = Layer(
                 name=f"{self.name} FF LIF Cell Group {i+1}",
-                model=self.basis,
+                model=self.model,
                 size=hidden_dim,
                 input_group=prev,
                 recurrent=False,
@@ -198,7 +199,7 @@ class BaseRSNN(torch.nn.Module):
             )
             first = False
             initializer.initialize(new)
-            self.basis.add_monitor(
+            self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
                     "out",
@@ -206,7 +207,7 @@ class BaseRSNN(torch.nn.Module):
                     title=f"{self.name} FF LIF Cell Group {i+1}",
                 )
             )
-            self.basis.add_monitor(
+            self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
                     "mem",
@@ -214,17 +215,17 @@ class BaseRSNN(torch.nn.Module):
                     title=f"{self.name} FF LIF Cell Group {i+1}",
                 )
             )
-            self.basis.add_monitor(
+            self.model.add_monitor(
                 PopulationSpikeCountMonitor(new.output_group, avg=True)
             )
-            self.basis.add_monitor(ActiveNeuronMonitor(new.output_group))
+            self.model.add_monitor(ActiveNeuronMonitor(new.output_group))
 
             prev = new.output_group
 
         # make the readout
         new = Layer(
             name=f"{self.name} Readout Pool Layer",
-            model=self.basis,
+            model=self.model,
             size=self.output_dim * readout_kwargs["n_readouts"],
             input_group=prev,
             recurrent=False,
@@ -236,7 +237,7 @@ class BaseRSNN(torch.nn.Module):
             connection_kwargs=connection_kwargs,
         )
         initializer.initialize(new)
-        self.basis.add_monitor(
+        self.model.add_monitor(
             PlotStateMonitor(
                 new.output_group,
                 "out",
@@ -248,7 +249,7 @@ class BaseRSNN(torch.nn.Module):
 
         # make the readout
         if self.out_style == "mean":
-            output_group = new = self.basis.add_group(
+            output_group = new = self.model.add_group(
                 TimeAverageReadoutGroup(
                     self.output_dim,
                     steps=self.repeat_input,
@@ -258,19 +259,19 @@ class BaseRSNN(torch.nn.Module):
             )
 
         elif self.out_style == "last":
-            output_group = new = self.basis.add_group(
+            output_group = new = self.model.add_group(
                 DirectReadoutGroup(
                     self.output_dim, weight_scale=1.0, name=f"{self.name} Direct Readout Group"
                 )
             )
 
-        self.basis.add_monitor(
+        self.model.add_monitor(
             PlotStateMonitor(
                 output_group, "out", plot_fn=plot_traces, title=f"{self.name} Average Readout Layer"
             )
         )
 
-        con = self.basis.add_connection(
+        con = self.model.add_connection(
             Connection(prev, new, bias=False, requires_grad=False)
         )
         readout_initializer = AverageInitializer()
@@ -278,30 +279,34 @@ class BaseRSNN(torch.nn.Module):
 
         # configure the model
         # TODO: Rework how optimizers work!
-        self.basis.configure(
+        self.model.configure(
             input_group,
             output_group,
             time_step=dt,
         )
 
+        self.optimizer = None
         self.state_initialized = False
+
+    def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
+        self.optimizer = optimizer
 
     def reset_state(self) -> None:
         # I work with a flag here, because I do not know the batch size at init time
         self.state_initialized = False
 
     def init_state(self, batch_size: int = 1) -> None:
-        self.basis.reset_state(batch_size)
+        self.model.reset_state(batch_size)
         self.state_initialized = True
 
     def get_monitor_data(self, exclude: list = []) -> dict[str, object]:
-        return self.basis.get_monitor_data(exclude)
+        return self.model.get_monitor_data(exclude)
 
     def get_reg_loss(self) -> Tensor:
-        return self.basis.compute_regularizer_losses()
+        return self.model.compute_regularizer_losses()
 
     def get_log_dict(self) -> dict[str, object]:
-        log_dict = self.basis.get_monitor_data()
+        log_dict = self.model.get_monitor_data()
         for key in log_dict:
             if log_dict[key] is None:
                 del log_dict[key]
@@ -309,19 +314,59 @@ class BaseRSNN(torch.nn.Module):
         return log_dict
 
     def to(self, device: Union[str, torch.device]) -> None:
+        """move model to device"""
         self.device = device
-        self.basis.to(device)
+        self.model.to(device)
         super().to(device)
         return self
 
     def count_parameters(self):
-        return self.basis.count_parameters()
+        return self.model.count_parameters()
+    
+    def prepare_input(self, x: Tensor) -> None:
+        """prepare input shapes for forward pass"""
+        # add a temporal dimension if necessary
+        if len(x.shape) == 2:
+            x = x.unsqueeze(0)
+        # control stork networks want (N, T, D)
+        return x.transpose(0, 1)
 
-    def step(self, *args, **kwargs) -> Tensor:
-        raise NotImplementedError("This method should be implemented by subclasses.")
+    def step(self, x: Tensor, record: bool = False) -> Tensor:
+        """perform a single step of the model"""
+        return self.model(x, record=record)
 
-    def forward(self, *args, **kwargs) -> Tensor:
-        raise NotImplementedError("This method should be implemented by subclasses.")
+    def forward(self, *args: Tensor, record: bool = False, **kwargs) -> Tensor:
+        """forward pass of the model on an input sequence"""
+        x = torch.cat([self.prepare_input(i) for i in args], -1)
+        N = x.shape[0]
+        T = x.shape[1]
 
-    def predict(self, *args, **kwargs) -> Tensor:
-        raise NotImplementedError("This method should be implemented by subclasses.")
+        if not self.state_initialized:
+            self.init_state(N)
+        
+        x_outs = torch.empty((T, N, self.output_dim), device=self.device)
+        for t in range(T):
+            for _ in range(self.repeat_input):
+                x_out = self.step(x[:, t:t+1], record=record)
+            x_outs[t] = x_out[:, -1]
+
+        return x_outs
+
+    def predict(
+            self,
+            *args: Tensor,
+            deterministic: bool = True,
+            record: bool = False,
+    ) -> Tensor:
+        
+        return self(*args, record=record)
+    
+    def train_fn(*args, **kwargs):
+        """ To be implemented by child class."""
+        raise NotImplementedError
+    
+    def criterion(self, *args, **kwargs) -> Tensor:
+        raise NotImplementedError
+    
+    def __str__(self) -> str:
+        return str(self.model)

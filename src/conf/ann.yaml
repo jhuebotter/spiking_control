@@ -5,7 +5,7 @@ model:
     activation_kwargs:
       act_fn: lrelu
 
-optim:
+optimizer:
   type: smorms3
   params:
     lr: 0.0005

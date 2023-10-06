@@ -2,7 +2,8 @@ import torch
 from control_stork.activations import SigmoidSpike
 from control_stork.nodes import FastLIFGroup
 from . import BaseRSNN
-
+from src.memory import EpisodeMemory
+from src.utils import get_grad_norm
 from src.extratyping import *
 
 
@@ -55,50 +56,90 @@ class PolicyNetRSNN(BaseRSNN):
             **kwargs,
         )
 
-    def step(
-        self, state: Tensor, target: Tensor, record: bool = False
-    ) ->  Tensor:
-        x = torch.cat((state, target), -1)
-        x = self.basis(x, record=record)
+    def criterion(self, y_hat: Tensor, y: Tensor, loss_gain: Optional[dict] = None) -> Tensor:
+        if loss_gain is None:
+            return torch.nn.functional.mse_loss(y_hat, y)
+        use = torch.tensor(loss_gain['use'], device=self.device, dtype=torch.bool)
+        gain = torch.tensor(loss_gain['gain'], device=self.device)
+        return torch.mean(torch.pow(y_hat[:, use] - y, 2) * gain)
 
-        return torch.tanh(x)
+    def train_fn(
+            self,
+            memory: EpisodeMemory,
+            transition_model: BaseRSNN,
+            loss_gain: Optional[dict] = None,
+            batch_size: int = 128,
+            warmup_steps: int = 5,
+            unroll_steps: int = 20,
+            max_norm: Optional[float] = None,
+            record: bool = False,
+            excluded_monitor_keys: Optional[list[str]] = None,
+        ) -> dict:
 
-    def forward(
-        self, state: Tensor, target: Tensor, record: bool = False
-    ) -> Tensor:
-        if len(state.shape) == 2:
-            state.unsqueeze_(0)
+        # sample a batch of transitions
+        (
+            states,
+            targets,
+            actions,
+            _,
+            _,
+            _,
+        ) = memory.sample_batch(
+            batch_size=batch_size,
+            warmup_steps=warmup_steps,
+            unroll_steps=0,
+            device=self.device,
+        )
 
-        if len(target.shape) == 2:
-            target.unsqueeze_(0)
+        # initialize the loss
+        policy_loss = torch.zeros(1, device=self.device)
+        loss = torch.zeros(1, device=self.device)
 
-        T = state.shape[0]
-        N = state.shape[1]
-        D = state.shape[2]
+        # reset the model
+        self.train()
+        transition_model.eval()
+        self.zero_grad()
+        transition_model.zero_grad()
+        self.reset_state()
+        transition_model.reset_state()
 
-        # control stork networks want (N, T, D)
-        state = state.transpose(0, 1)
-        target = target.transpose(0, 1)
+        # warmup the model
+        if warmup_steps:
+            self(states[:warmup_steps], targets[:warmup_steps], record=record)
+            transition_model(states[:warmup_steps], actions[:warmup_steps])
 
-        if not self.state_initialized:
-            self.init_state(N)
+        new_state_hat = states[-1]
+        target = targets[-1]
 
-        mu_outs = torch.empty((T, N, self.action_dim), device=self.basis.device)
-        for t in range(T):
-            for _ in range(self.repeat_input):
-                mu = self.step(
-                    state[:, t].view(N, 1, D), target[:, t].view(N, 1, D), record=record
-                )
-            mu_outs[t] = mu[:, -1]
+        # unroll the model
+        for i in range(unroll_steps):
+            action_hat = self(new_state_hat, target, record=record)
+            new_state_delta_hat = transition_model(new_state_hat, action_hat)
+            new_state_hat = new_state_hat + new_state_delta_hat
+            policy_loss += self.criterion(new_state_hat.squeeze(0), target, loss_gain=loss_gain)
 
-        return mu_outs
+        # compute the loss
+        policy_loss = policy_loss / unroll_steps 
+        reg_loss = self.get_reg_loss()
+        loss = policy_loss + reg_loss
 
-    def predict(
-        self,
-        state: Tensor,
-        target: Tensor,
-        deterministic: bool = True,
-        record: bool = False,
-    ) -> Tensor:
-                
-        return self(state, target, record)
+        # update the model
+        loss.backward()
+        grad_norm = get_grad_norm(self.model)
+        if max_norm is not None:
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
+        clipped_grad_norm = get_grad_norm(self.model)
+        self.optimizer.step()
+
+        result = {
+            "policy model loss": loss.item(),
+            "policy model policy loss": policy_loss.item(),
+            "policy model reg_loss": reg_loss.item(),
+            "policy model grad norm": grad_norm,
+            "policy model clipped grad norm": clipped_grad_norm,
+        }
+
+        if record:
+            result.update(self.get_monitor_data(exclude=excluded_monitor_keys))
+
+        return result

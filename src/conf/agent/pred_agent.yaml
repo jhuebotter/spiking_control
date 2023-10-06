@@ -1,0 +1,7 @@
+memory:
+  type: "episode"
+  params:
+    max_size: 100
+
+steps_per_iteration: 5000
+reset_memory: True

@@ -8,3 +8,8 @@ from .ann import (
     PolicyNetPRNN,
     TransitionNetPRNN,
 )
+
+from .utils import (
+    make_transition_model,
+    make_policy_model,
+)

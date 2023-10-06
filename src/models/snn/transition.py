@@ -2,7 +2,8 @@ import torch
 from control_stork.activations import SigmoidSpike
 from control_stork.nodes import FastLIFGroup
 from . import BaseRSNN
-
+from src.memory import EpisodeMemory
+from src.utils import get_grad_norm
 from src.extratyping import *
 
 
@@ -52,47 +53,84 @@ class TransitionNetRSNN(BaseRSNN):
             **kwargs,
         )
 
-    def step(self, state: Tensor, action: Tensor, record: bool = False) -> Tensor:
-        x = torch.cat((state, action), -1)
-        x = self.basis(x, record=record)
+    def criterion(self, y_hat: Tensor, y: Tensor) -> Tensor:
+        return torch.nn.functional.mse_loss(y_hat, y)
 
-        return x
-    
-    def forward(self, state: Tensor, action: Tensor, record: bool = False) -> Tensor:
-        if len(state.shape) == 2:
-            state.unsqueeze_(0)
-
-        if len(action.shape) == 2:
-            action.unsqueeze_(0)
-
-        T = state.shape[0]
-        N = state.shape[1]
-        D_state = state.shape[2]
-        D_action = action.shape[2]
-
-        # control stork networks want (N, T, D)
-        state = state.transpose(0, 1)
-        action = action.transpose(0, 1)
-
-        if not self.state_initialized:
-            self.init_state(N)
-
-        x_outs = torch.empty((T, N, self.output_dim), device=self.basis.device)
-        for t in range(T):
-            for _ in range(self.repeat_input):
-                x = self.step(
-                    state[:, t].view(N, 1, D_state), action[:, t].view(N, 1, D_action), record=record
-                )
-            x_outs[t] = x[:, -1]
-
-        return x_outs
-    
-    def predict(
+    def train_fn(
             self,
-            state: Tensor,
-            action: Tensor,
-            deterministic: bool = True,
+            memory: EpisodeMemory,
+            batch_size: int = 128,
+            warmup_steps: int = 5,
+            unroll_steps: int = 1,
+            autoregressive: bool = False,
+            max_norm: Optional[float] = None,
             record: bool = False,
-    ) -> Tensor:
-        
-        return self(state, action, record)
+            excluded_monitor_keys: Optional[list[str]] = None,
+        ) -> dict:
+
+        # sample a batch of transitions
+        (
+            states,
+            _,
+            actions,
+            _,
+            _,
+            next_states,
+        ) = memory.sample_batch(
+            batch_size=batch_size,
+            warmup_steps=warmup_steps,
+            unroll_steps=unroll_steps,
+            device=self.device,
+        )
+
+        # initialize the loss
+        prediction_loss = torch.zeros(1, device=self.device)
+        loss = torch.zeros(1, device=self.device)
+
+        # reset the model
+        self.train()
+        self.zero_grad()
+        self.reset_state()
+
+        # warmup the model
+        if warmup_steps:
+            self(states[:warmup_steps], actions[:warmup_steps], record=record)
+        state = states[warmup_steps]
+
+        # unroll the model
+        for i in range(unroll_steps):
+            action = actions[warmup_steps + i]
+            next_state = next_states[warmup_steps + i]
+            next_state_delta_hat = self.predict(state, action, record=record)
+            next_state_hat = state + next_state_delta_hat
+            prediction_loss += self.criterion(next_state_hat.squeeze(0), next_state)
+            if autoregressive:
+                state = next_state_hat
+            else:
+                state = next_state
+
+        # compute the loss
+        prediction_loss = prediction_loss / unroll_steps
+        reg_loss = self.get_reg_loss()
+        loss = prediction_loss + reg_loss
+
+        # update the model
+        loss.backward()
+        grad_norm = get_grad_norm(self.model)
+        if max_norm:
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm)
+        clipped_grad_norm = get_grad_norm(self.model)
+        self.optimizer.step()
+
+        result = {
+            "transition model loss": loss.item(),
+            "transition model prediction loss": prediction_loss.item(),
+            "transition model reg loss": reg_loss.item(),
+            "transition model grad norm": grad_norm,
+            "transition model clipped grad norm": clipped_grad_norm,
+        }
+
+        if record:
+            result.update(self.get_monitor_data(exclude=excluded_monitor_keys))
+
+        return result

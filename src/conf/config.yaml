@@ -1,5 +1,6 @@
 defaults:
   - task: reacher
+  - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
   - wandb: wandb
@@ -7,3 +8,10 @@ defaults:
 
 seed: 42
 experiment: default
+device: cuda
+
+task:
+  num_envs: 25
+  params:
+    render_mode: human
+

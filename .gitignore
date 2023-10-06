@@ -58,3 +58,4 @@ docs/_build/
 # Project
 results/
 outputs/
+wandb/
