@@ -1,61 +1,47 @@
 import torch
-from control_stork.activations import SigmoidSpike
-from control_stork.nodes import FastLIFGroup
-from . import BaseRSNN
+from torch import nn, Tensor
+from torch.nn import functional as F
+from .base import BasePRNN
 from src.memory import EpisodeMemory
 from src.utils import get_grad_norm
 from src.extratyping import *
 
 
-class TransitionNetRSNN(BaseRSNN):
+class TransitionNetPRNN(BasePRNN):
+    """probabilistic transition network"""
+
     def __init__(
-        self,
-        action_dim: int,
-        state_dim: int,
-        hidden_dim: int,
-        num_rec_layers: int = 1,
-        num_ff_layers: int = 1,
-        repeat_input: int = 1,
-        out_style: str = "last",
-        dt: float = 0.001,
-        device=None,
-        dtype=None,
-        flif_kwargs: dict = {},
-        readout_kwargs: dict = {},
-        neuron_type=FastLIFGroup,
-        act_fn=SigmoidSpike,
-        connection_dims: Optional[int] = None,
-        nu: float = 50,
-        **kwargs,
-    ) -> None:
-        
-        self.action_dim = action_dim
-        self.state_dim = state_dim
+            self, 
+            action_dim: int, 
+            state_dim: int, 
+            hidden_dim: int, 
+            num_rec_layers: int = 1,
+            num_ff_layers: int = 1, 
+            bias: bool = True, 
+            act_fn: Callable = F.leaky_relu,
+            device: Union[str, torch.device] = "cpu",
+            dtype: torch.dtype = torch.float,
+            name: str = "PolicyNet",
+            **kwargs
+        ) -> None:
 
         super().__init__(
             input_dim=state_dim + action_dim,
-            output_dim=state_dim,
             hidden_dim=hidden_dim,
+            output_dim=state_dim,
             num_rec_layers=num_rec_layers,
             num_ff_layers=num_ff_layers,
-            repeat_input=repeat_input,
-            out_style=out_style,
-            dt=dt,
+            bias=bias,
+            act_fn=act_fn,
             device=device,
             dtype=dtype,
-            flif_kwargs=flif_kwargs,
-            readout_kwargs=readout_kwargs,
-            neuron_type=neuron_type,
-            act_fn=act_fn,
-            connection_dims=connection_dims,
-            nu=nu,
-            name="TransitionNet",
-            **kwargs,
+            name=name,
+            **kwargs
         )
 
-    def criterion(self, y_hat: Tensor, y: Tensor) -> Tensor:
-        return torch.nn.functional.mse_loss(y_hat, y)
-
+    def criterion(self, mu: Tensor, y: Tensor, logvar: Tensor) -> Tensor:
+        return torch.nn.functional.gaussian_nll_loss(mu, y, logvar.exp(), reduction="mean")
+    
     def train_fn(
             self,
             memory: EpisodeMemory,
@@ -63,9 +49,7 @@ class TransitionNetRSNN(BaseRSNN):
             warmup_steps: int = 5,
             unroll_steps: int = 1,
             autoregressive: bool = False,
-            max_norm: Optional[float] = None,
-            record: bool = False,
-            excluded_monitor_keys: Optional[list[str]] = None,
+            max_norm: Optional[float] = None
         ) -> dict:
 
         # sample a batch of transitions
@@ -93,18 +77,21 @@ class TransitionNetRSNN(BaseRSNN):
 
         # warmup the model
         if warmup_steps:
-            self(states[:warmup_steps], actions[:warmup_steps], record=record)
+            self(states[:warmup_steps], actions[:warmup_steps])
         state = states[warmup_steps]
 
         # unroll the model
         for i in range(unroll_steps):
             action = actions[warmup_steps + i]
             next_state = next_states[warmup_steps + i]
-            next_state_delta_hat = self.predict(state, action, record=record)
-            next_state_hat = state + next_state_delta_hat
-            prediction_loss += self.criterion(next_state_hat.squeeze(0), next_state)
+            # compute the prediction
+            next_state_hat_delta_mu, next_state_hat_delta_logvar = self(state, action)
+            next_state_hat_mu = state + next_state_hat_delta_mu
+            # compute the loss
+            prediction_loss += self.criterion(next_state_hat_mu, next_state, next_state_hat_delta_logvar)
+            # update the state
             if autoregressive:
-                state = next_state_hat
+                state = self.reparameterize(next_state_hat_mu, next_state_hat_delta_logvar)
             else:
                 state = next_state
 
@@ -117,7 +104,7 @@ class TransitionNetRSNN(BaseRSNN):
         loss.backward()
         grad_norm = get_grad_norm(self.model)
         if max_norm:
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
         clipped_grad_norm = get_grad_norm(self.model)
         self.optimizer.step()
 
@@ -128,8 +115,5 @@ class TransitionNetRSNN(BaseRSNN):
             "transition model grad norm": grad_norm,
             "transition model clipped grad norm": clipped_grad_norm,
         }
-
-        if record:
-            result.update(self.get_monitor_data(exclude=excluded_monitor_keys))
 
         return result

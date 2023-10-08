@@ -1,8 +1,8 @@
 defaults:
   - task: reacher
   - agent: pred_agent
-  - policy: snn_policy
-  - transition: snn_transition
+  - policy: prnn_policy
+  - transition: prnn_transition
   - wandb: wandb
   - _self_
 
@@ -15,3 +15,5 @@ task:
   params:
     render_mode: human
 
+run:
+  load_path: null

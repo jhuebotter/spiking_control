@@ -1,5 +1,11 @@
 import gymnasium as gym
 import torch
+from omegaconf import DictConfig, OmegaConf
+from .extratyping import *
+
+
+def conf_to_dict(config: DictConfig) -> dict:
+    return OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
 
 def get_grad_norm(model: torch.nn.Module) -> float:
@@ -54,3 +60,47 @@ def make_optimizer(model: torch.nn.Module, config: dict) -> torch.optim.Optimize
         return Opt(model.parameters(), **config['params'])
     elif isinstance(model, list):
         return Opt([l.parameters() for l in model], **config['params'])
+
+
+def save_checkpoint(model: torch.nn.Module, path: str = "model_checkpoint.cpt", optimizer: Optional[Optimizer] = None, **kwargs) -> None:
+    """save model parameters to disk"""
+
+    checkpoint = {
+        "model_state_dict": model.state_dict()
+    }
+    if optimizer is not None:
+        checkpoint.update({
+            "optimizer_state_dict": optimizer.state_dict()
+        })
+
+    misc = dict(**kwargs)
+
+    checkpoint.update({
+        "misc": misc
+    })
+
+    torch.save(checkpoint, path)
+
+
+def load_checkpoint(path: str, device: str = 'cpu') -> dict:
+    """load model parameters from disk"""
+
+    return torch.load(path, map_location=torch.device(device))
+
+
+def load_weights_from_disk(model: Module, path: str, optim: Optional[Optimizer] = None, device: str = 'cpu') -> \
+        tuple[Module, Optional[Optimizer]]:
+    """update (partial) model parameters based on previous checkpoint"""
+
+    cp = load_checkpoint(path, device)
+    current_weights = model.state_dict()
+    new_weights = {**current_weights}
+    new_weights.update(**cp['model_state_dict'])
+    model.load_state_dict(new_weights)
+
+    if optim:
+        current_state = optim.state_dict()
+        current_state.update(cp['optimizer_state_dict'])
+        optim.load_state_dict(current_state)
+
+    return model, optim

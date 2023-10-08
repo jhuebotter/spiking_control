@@ -1,7 +1,13 @@
 from . import BaseAgent
 from ..memory import EpisodeMemory, Transition, Episode
-from ..models import make_transition_model, make_policy_model
-from ..utils import make_optimizer
+from ..models import (
+    make_transition_model,
+    make_policy_model
+)
+from ..utils import (
+    make_optimizer,
+    conf_to_dict
+)
 
 import gymnasium as gym
 import torch
@@ -28,6 +34,7 @@ class PredictiveControlAgent(BaseAgent):
         self.memory_config = config.agent.memory
         self.transition_config = config.transition
         self.policy_config = config.policy
+        self.run_config = config.run
 
         # training parameters
         self.reset_memory = config.agent.reset_memory
@@ -53,14 +60,14 @@ class PredictiveControlAgent(BaseAgent):
         self.transition_model = make_transition_model(
             action_dim = self.action_dim, 
             state_dim = self.state_dim, 
-            config = self.transition_config.get("model", {})
+            config = conf_to_dict(self.transition_config.get("model", {}))
         ).to(self.device)
 
         self.policy_model = make_policy_model(
             action_dim = self.action_dim,
             state_dim = self.state_dim,
             target_dim = self.target_dim,
-            config = self.policy_config.get("model", {})
+            config = conf_to_dict(self.policy_config.get("model", {}))
         ).to(self.device)
 
         # initialize optimizers
@@ -120,7 +127,7 @@ class PredictiveControlAgent(BaseAgent):
                 while step < steps:
 
                     # predict the action
-                    actions = self.policy_model(obs, targets)
+                    actions = self.policy_model.predict(obs, targets)
                     actions = actions.squeeze(0).clamp(action_min, action_max).detach()
 
                     # step the environment
@@ -225,7 +232,7 @@ class PredictiveControlAgent(BaseAgent):
                         if render:
                             env.render()
     
-                        action = self.policy_model(obs, targets)
+                        action = self.policy_model.predict(obs, targets)
                         action = action.squeeze(0).clamp(-1, 1).detach()
     
                         observations, rewards, terminates, truncateds, infos = env.step(action.cpu().numpy())
@@ -242,8 +249,48 @@ class PredictiveControlAgent(BaseAgent):
                         total_reward += sum(rewards) / env.num_envs
                         done = True if terminates[0] or truncateds[0] else False
 
-    def save(self):
-        raise NotImplementedError
+    def save_models(self):
 
-    def load(self):
-        raise NotImplementedError
+        self.save_transition_model()
+        self.save_policy_model()
+
+    def save_transition_model(self):
+
+        self.save(
+            self.transition_model,
+            self.run_config.get("save_path", "") + "transition_model.cpt",
+            self.transition_model.get_optimizer()
+        )
+
+    def save_policy_model(self):
+
+        self.save(
+            self.policy_model,
+            self.run_config.get("save_path", "") + "policy_model.cpt",
+            self.policy_model.get_optimizer()
+        )
+    
+    def load_models(self):
+
+        self.load_transition_model()
+        self.load_policy_model()
+
+    def load_transition_model(self):
+
+        self.transition_model, op = self.load(
+            self.transition_model,
+            self.run_config.get("load_path", "") + "transition_model.cpt",
+            self.transition_model.get_optimizer()
+        )
+        if op is not None:
+            self.transition_model.set_optimizer(op)
+    
+    def load_policy_model(self):
+
+        self.policy_model, op = self.load(
+            self.policy_model,
+            self.run_config.get("load_path", "") + "policy_model.cpt",
+            self.policy_model.get_optimizer()
+        )
+        if op is not None:
+            self.policy_model.set_optimizer(op)

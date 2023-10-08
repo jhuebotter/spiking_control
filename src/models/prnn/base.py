@@ -40,7 +40,7 @@ class BasePRNN(nn.Module):
         if num_rec_layers:
             layers["gru"] = nn.GRU(input_dim, hidden_dim, num_rec_layers, bias)
         for i in range(num_ff_layers):
-            dim = in_dim if (i == 0 and not num_rec_layers) else hidden_dim
+            dim = input_dim if (i == 0 and not num_rec_layers) else hidden_dim
             layers[f"fc_ff{i + 1}"] = nn.Linear(dim, hidden_dim, bias)
         layers["fc_mu"] = nn.Linear(hidden_dim, output_dim, bias)
         layers["fc_var"] = nn.Linear(hidden_dim, output_dim, bias)
@@ -58,6 +58,9 @@ class BasePRNN(nn.Module):
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
         self.optimizer = optimizer
 
+    def get_optimizer(self) -> torch.optim.Optimizer:
+        return self.optimizer
+
     def reset_state(self) -> None:
         self.h = None
 
@@ -69,6 +72,10 @@ class BasePRNN(nn.Module):
 
     def update_state(self, h: Tensor) -> None:
         self.h = h
+
+    def get_reg_loss(self) -> Tensor:
+        # currently no regularization
+        return torch.zeros(1, device=self.device)
 
     def prepare_input(self, x: Tensor) -> None:
         """prepare input shapes for forward pass"""
@@ -90,7 +97,7 @@ class BasePRNN(nn.Module):
         super().to(device)
         return self
 
-    def reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
+    def reparameterize(self, mu: Tensor, logvar: Tensor) -> Tensor:
         """perform reparametrization trick for a Gaussian distribution"""
         std = logvar.mul(0.5).exp_()
         eps = torch.randn_like(std)

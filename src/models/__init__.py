@@ -3,7 +3,7 @@ from .snn import (
     PolicyNetRSNN,
     TransitionNetRSNN,
 )
-from .ann import (
+from .prnn import (
     BasePRNN,
     PolicyNetPRNN,
     TransitionNetPRNN,

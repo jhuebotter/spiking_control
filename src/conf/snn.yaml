@@ -10,10 +10,11 @@ model:
     lowerBoundL2Strength: 0.0
     upperBoundL2Strength: 1.0
     weightL2Strength: 0.0
-    activation_kwargs:
-      act_fn: sigmoidspike
-      beta: 20.0
-      gamma: 1.0
+    activation_fn:
+      type: sigmoidspike
+      activation_kwargs:
+        beta: 20.0
+        gamma: 1.0
     flif_kwargs:
       tau_mem: 0.02
       tau_syn: 0.01

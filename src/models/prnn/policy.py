@@ -1,59 +1,43 @@
 import torch
-from control_stork.activations import SigmoidSpike
-from control_stork.nodes import FastLIFGroup
-from . import BaseRSNN
+from torch import nn, Tensor
+from torch.nn import functional as F
+from .base import BasePRNN
 from src.memory import EpisodeMemory
 from src.utils import get_grad_norm
 from src.extratyping import *
 
 
-class PolicyNetRSNN(BaseRSNN):
+class PolicyNetPRNN(BasePRNN):
+    """probabilistic policy network"""
+
     def __init__(
-        self,
-        action_dim: int,
-        state_dim: int,
-        target_dim: int,
-        hidden_dim: int,
-        num_rec_layers: int = 0,
-        num_ff_layers: int = 2,
-        repeat_input: int = 1,
-        out_style: str = "last",
-        dt: float = 1e-3,
-        device=None,
-        dtype=None,
-        flif_kwargs: dict = {},
-        readout_kwargs: dict = {},
-        neuron_type=FastLIFGroup,
-        act_fn=SigmoidSpike,
-        connection_dims: Optional[int] = None,
-        nu: float = 50.0,
-        **kwargs,
-    ) -> None:
-        
-        # gather layer parameters
-        self.action_dim = action_dim
-        self.state_dim = state_dim
-        self.target_dim = target_dim
+            self, 
+            action_dim: int, 
+            state_dim: int, 
+            target_dim: int, 
+            hidden_dim: int, 
+            num_rec_layers: int = 0,
+            num_ff_layers: int = 2, 
+            bias: bool = True, 
+            act_fn: Callable = F.leaky_relu,
+            device: Union[str, torch.device] = "cpu",
+            dtype: torch.dtype = torch.float,
+            name: str = "PolicyNet",
+            **kwargs
+        ) -> None:
 
         super().__init__(
             input_dim=state_dim + target_dim,
-            output_dim=action_dim,
             hidden_dim=hidden_dim,
+            output_dim=action_dim,
             num_rec_layers=num_rec_layers,
             num_ff_layers=num_ff_layers,
-            repeat_input=repeat_input,
-            out_style=out_style,
-            dt=dt,
+            bias=bias,
+            act_fn=act_fn,
             device=device,
             dtype=dtype,
-            flif_kwargs=flif_kwargs,
-            readout_kwargs=readout_kwargs,
-            neuron_type=neuron_type,
-            act_fn=act_fn,
-            connection_dims=connection_dims,
-            nu=nu,
-            name="PolicyNet",
-            **kwargs,
+            name=name,
+            **kwargs
         )
 
     def criterion(self, y_hat: Tensor, y: Tensor, loss_gain: Optional[dict] = None) -> Tensor:
@@ -63,20 +47,38 @@ class PolicyNetRSNN(BaseRSNN):
         gain = torch.tensor(loss_gain['gain'], device=self.device)
         return torch.mean(torch.pow(y_hat[:, use] - y, 2) * gain)
 
+    def get_reg_loss(
+            self, 
+            action_mu: Tensor, 
+            action_logvar: Tensor, 
+            action_target_std: Optional[float] = None, 
+            scale: float = 1.0,
+        ) -> Tensor:
+
+        if action_target_std is None:
+            return torch.zeros(1, device=self.device)
+
+        # compute the regularization loss
+        action_target_dist = torch.distributions.Normal(0.0, action_target_std)
+        action_dist = torch.distributions.Normal(action_mu, action_logvar.exp().sqrt())
+        
+        action_reg_loss = torch.distributions.kl_divergence(action_dist, action_target_dist).mean().to(self.device)
+        return action_reg_loss * scale
+    
     def train_fn(
             self,
             memory: EpisodeMemory,
-            transition_model: BaseRSNN,
+            transition_model: BasePRNN,
             loss_gain: Optional[dict] = None,
             batch_size: int = 128,
             warmup_steps: int = 5,
             unroll_steps: int = 20,
             max_norm: Optional[float] = None,
             deterministic_transition: bool = False,
-            record: bool = False,
-            excluded_monitor_keys: Optional[list[str]] = None,
-        ) -> dict:
-
+            action_target_std: Optional[float] = None,
+            scale: float = 1.0
+    ) -> dict:
+        
         # sample a batch of transitions
         (
             states,
@@ -94,6 +96,7 @@ class PolicyNetRSNN(BaseRSNN):
 
         # initialize the loss
         policy_loss = torch.zeros(1, device=self.device)
+        reg_loss = torch.zeros(1, device=self.device)
 
         # reset the model
         self.train()
@@ -105,7 +108,7 @@ class PolicyNetRSNN(BaseRSNN):
 
         # warmup the model
         if warmup_steps:
-            self(states[:warmup_steps], targets[:warmup_steps], record=record)
+            self(states[:warmup_steps], targets[:warmup_steps])
             transition_model(states[:warmup_steps], actions[:warmup_steps])
 
         new_state_hat = states[-1]
@@ -113,18 +116,22 @@ class PolicyNetRSNN(BaseRSNN):
 
         # unroll the model
         for i in range(unroll_steps):
-            action_hat = self(new_state_hat, target, record=record)
-            new_state_delta_hat = transition_model(new_state_hat, action_hat, deterministic=deterministic_transition)
+            action_mu, action_logvar = self(new_state_hat, target)
+            action = self.reparameterize(action_mu, action_logvar)
+            new_state_delta_hat = transition_model.predict(new_state_hat, action, deterministic=deterministic_transition)
             new_state_hat = new_state_hat + new_state_delta_hat
-            policy_loss += self.criterion(new_state_hat.squeeze(0), target, loss_gain=loss_gain)
+            # compute the loss
+            policy_loss += self.criterion(new_state_hat.squeeze(0), target, loss_gain)
+            reg_loss += self.get_reg_loss(action_mu, action_logvar, action_target_std, scale)
 
         # compute the loss
-        policy_loss = policy_loss / unroll_steps 
-        reg_loss = self.get_reg_loss()
+        policy_loss = policy_loss / unroll_steps
+        reg_loss = reg_loss / unroll_steps
         loss = policy_loss + reg_loss
 
         # update the model
         loss.backward()
+
         grad_norm = get_grad_norm(self.model)
         if max_norm is not None:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
@@ -138,8 +145,5 @@ class PolicyNetRSNN(BaseRSNN):
             "policy model grad norm": grad_norm,
             "policy model clipped grad norm": clipped_grad_norm,
         }
-
-        if record:
-            result.update(self.get_monitor_data(exclude=excluded_monitor_keys))
 
         return result

@@ -291,6 +291,9 @@ class BaseRSNN(torch.nn.Module):
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
         self.optimizer = optimizer
 
+    def get_optimizer(self) -> torch.optim.Optimizer:
+        return self.optimizer
+
     def reset_state(self) -> None:
         # I work with a flag here, because I do not know the batch size at init time
         self.state_initialized = False

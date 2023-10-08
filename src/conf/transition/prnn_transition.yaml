@@ -1,5 +1,5 @@
 defaults:
-  - /ann
+  - /prnn
 
 model:
   params:
