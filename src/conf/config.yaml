@@ -3,7 +3,7 @@ defaults:
   - agent: pred_agent
   - policy: prnn_policy
   - transition: prnn_transition
-  - wandb: wandb
+  - logging: logging
   - _self_
 
 seed: 42
@@ -12,6 +12,7 @@ device: cuda
 
 task:
   num_envs: 25
+  num_eval_envs: 8
   params:
     render_mode: human
 

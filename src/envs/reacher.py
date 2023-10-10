@@ -23,6 +23,7 @@ class ReacherEnv(gym.Env):
         fully_observable: bool = True,
         show_target_arm: bool = False,
         dt: float = 0.02,
+        eval: bool = False,
         **kwargs
     ):
         self.metadata = {
@@ -36,6 +37,8 @@ class ReacherEnv(gym.Env):
         self.max_action = 1.0
         self.force_mag = 8.0
         self.damp = 5.0
+
+        self.eval = eval
 
         self.max_vel = np.pi
         self.min_vel = -self.max_vel
@@ -101,7 +104,7 @@ class ReacherEnv(gym.Env):
             'use': np.array([True, True, False, False, False, False, False, False])
         }
 
-        self.seed(seed)
+        self.set_seed(seed)
         self.screen = None
         self.clock = None
         self.isopen = True
@@ -109,9 +112,12 @@ class ReacherEnv(gym.Env):
         self.state = None
         self.target = None
 
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+    def set_seed(self, seed=None):
+        self.np_random, self.seed = seeding.np_random(seed)
+        return [self.seed]
+    
+    def get_seed(self):
+        return self.seed
     
     def get_loss_gain(self):
         return self.loss_gain
@@ -241,7 +247,18 @@ class ReacherEnv(gym.Env):
         target = options.get("target", None)
 
         if seed is not None:
-            self.seed(seed)
+            self.set_seed(seed)
+
+        # if in eval mode, make a deterministic environment
+        if self.eval:
+            if self.seed is None:
+                self.set_seed(0)
+            v = self.seed % 8
+            state = np.zeros(4)
+            target = np.zeros(4)
+            target[:2] = 2 * np.pi * v / 8.0
+            if self.moving_target:
+                target[2:] = self.max_vel * np.array([0.0, 0.5])
 
         # state is [theta_1, theta_2, \dot{theta_1}, \dot{theta_2}]
         if state is None:

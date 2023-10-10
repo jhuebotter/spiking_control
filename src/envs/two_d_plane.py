@@ -25,6 +25,7 @@ class TwoDPlaneEnv(gym.Env):
         force_mag: float = 5.0,
         drag: float = 0.0,
         dt: float = 0.02,
+        eval: bool = False,
         **kwargs
     ):
         self.metadata = {
@@ -40,13 +41,15 @@ class TwoDPlaneEnv(gym.Env):
         self.drag = drag
         self.angle = angle
 
+        self.eval = eval
+
         self.max_pos = 1.0
         self.min_pos = -self.max_pos
 
         self.max_vel = 1.0
         self.min_vel = -self.max_vel
 
-        self.stop_on_edge = True  # TODO: probably need to change back...
+        self.stop_on_edge = True
         self.done_on_edge = False
 
         self.random_target = True
@@ -96,11 +99,24 @@ class TwoDPlaneEnv(gym.Env):
                 dtype=np.float32,
             )
 
-        self.loss_gain = np.array([1.0, 1.0, 0.0, 0.0])
+        self.state_labels = [
+            "pos x", 
+            "pos y", 
+            "vel x", 
+            "vel y"
+        ]
 
-        self.state_labels = ["pos x", "pos y", "vel x", "vel y"]
+        self.target_labels = [
+            "pos x",
+            "pos y",
+        ]
 
-        self.seed(seed)
+        self.loss_gain = {
+            'gain': np.array([1.0, 1.0]),
+            'use': np.array([True, True, False, False])
+        }
+
+        self.set_seed(seed)
         self.screen = None
         self.clock = None
         self.isopen = True
@@ -109,9 +125,12 @@ class TwoDPlaneEnv(gym.Env):
         self.target = None
         self.target_angle = 0.0
 
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+    def set_seed(self, seed=None):
+        self.np_random, self.seed = seeding.np_random(seed)
+        return [self.seed]
+    
+    def get_seed(self):
+        return self.seed
 
     def check_pos_limit(self, x, dx):
         if x < self.min_pos:
@@ -210,7 +229,7 @@ class TwoDPlaneEnv(gym.Env):
         # make observation
         if self.fully_observable:
             observation = {
-                "propprio": np.random.normal(self.state, self.observation_noise_std),
+                "proprio": np.random.normal(self.state, self.observation_noise_std),
                 "target": np.random.normal(self.target, self.observation_noise_std),
             }
         else:
@@ -236,7 +255,20 @@ class TwoDPlaneEnv(gym.Env):
         target = options.get("target", None)
 
         if seed is not None:
-            self.seed(seed)
+            self.set_seed(seed)
+
+        # if in eval mode, make a deterministic environment
+        if self.eval:
+            if self.seed is None:
+                self.set_seed(0)
+            v = self.seed % 8
+            state = np.zeros(4)
+            target = np.zeros(4)
+            p = np.array([0.7, 0.0])
+            target[:2] = self.rotate(p, 45 * v)
+            if self.moving_target:
+                r = np.array([0.0, 0.5])
+                target[2:] = self.rotate(r, 45 * v)
 
         if state is None:
             self.state = np.zeros(4)
