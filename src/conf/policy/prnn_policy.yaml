@@ -10,4 +10,4 @@ learning:
   params:
     unroll_steps: 20
     deterministic_transition: True
-    beta: 0.0
+    reg_scale: 0.0

@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Iterable
 from torch.nn import Module
 from torch import Tensor
 from torch.optim import Optimizer

@@ -76,7 +76,7 @@ class PolicyNetPRNN(BasePRNN):
             max_norm: Optional[float] = None,
             deterministic_transition: bool = False,
             action_target_std: Optional[float] = None,
-            scale: float = 1.0
+            reg_scale: float = 1.0
     ) -> dict:
         
         # sample a batch of transitions
@@ -122,7 +122,7 @@ class PolicyNetPRNN(BasePRNN):
             new_state_hat = new_state_hat + new_state_delta_hat
             # compute the loss
             policy_loss += self.criterion(new_state_hat.squeeze(0), target, loss_gain)
-            reg_loss += self.get_reg_loss(action_mu, action_logvar, action_target_std, scale)
+            reg_loss += self.get_reg_loss(action_mu, action_logvar, action_target_std, reg_scale)
 
         # compute the loss
         policy_loss = policy_loss / unroll_steps

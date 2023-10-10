@@ -28,8 +28,8 @@ optimizer:
     lr: 0.0005
 
 learning:
+  batches_per_iteration: 10
   params:
     batch_size: 256
-    batches_per_iteration: 10
     max_norm: 30
     warmup_steps: 5

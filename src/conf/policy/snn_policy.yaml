@@ -9,4 +9,4 @@ model:
 learning:
   params:
     unroll_steps: 20
-    # deterministic_transition: True
+    deterministic_transition: True

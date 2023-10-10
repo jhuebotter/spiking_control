@@ -3,3 +3,4 @@ from . import envs
 from . import memory
 from . import models
 from . import utils
+from . import loggers

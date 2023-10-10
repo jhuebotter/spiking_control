@@ -6,7 +6,8 @@ from ..models import (
 )
 from ..utils import (
     make_optimizer,
-    conf_to_dict
+    conf_to_dict,
+    dict_mean
 )
 
 import gymnasium as gym
@@ -14,6 +15,7 @@ import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
 from typing import Optional
+from pathlib import Path
 
 
 class PredictiveControlAgent(BaseAgent):
@@ -21,13 +23,19 @@ class PredictiveControlAgent(BaseAgent):
             self, 
             env: gym.vector.VectorEnv, 
             config: DictConfig,
-            device: torch.device
+            device: torch.device,
+            loggers: list = [],
+            dir: Optional[str] = None,
+            eval_env: Optional[gym.vector.VectorEnv] = None
             ):
         
         super().__init__(
             env, 
             config,
-            device
+            device,
+            loggers,
+            dir,
+            eval_env
             )
 
         # initialize config
@@ -83,8 +91,9 @@ class PredictiveControlAgent(BaseAgent):
 
         # initialize counters
         self.steps = 0
-        self.iterations = 0
         self.episodes = 0
+        self.epochs = 0
+        self.iterations = 0
         self.policy_updates = 0
         self.transition_updates = 0
 
@@ -94,8 +103,10 @@ class PredictiveControlAgent(BaseAgent):
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()
             self.test()
-            self.steps += self.steps_per_iteration
+            self.save_models()
             self.iterations += 1
+
+        self.finish_run()
 
     def collect_rollouts(self, steps: int, reset_memory: bool = True):
         
@@ -160,22 +171,26 @@ class PredictiveControlAgent(BaseAgent):
                     step += num_envs
                     pbar.update(num_envs)
 
+        self.steps += step
+
     def train_epoch(self):
 
+        # train the models
         transition_results = self.train_transition_model()
         policy_results = self.train_policy_model()
+
+        return transition_results, policy_results
 
     def train_transition_model(self):
 
         # train the transition model
         transition_results = []
-        n_transition_batches = self.transition_config.learning.params.get("batches_per_iteration", 1)
+        n_transition_batches = self.transition_config.learning.get("batches_per_iteration", 1)
         pbar = tqdm(range(n_transition_batches), desc=f"{'training transition model':30}")
         for batch in pbar:
             transition_result = self.transition_model.train_fn(
                 self.memory,
-                self.transition_batch_size,
-                **self.transition_config.get("train_fn", {})
+                **self.transition_config.get("learning", {}).get("params", {})
             )
             self.transition_updates += 1
             loss = transition_result['transition model loss']
@@ -188,15 +203,14 @@ class PredictiveControlAgent(BaseAgent):
         
         # train the policy model
         policy_results = []
-        n_policy_batches = self.policy_config.learning.params.get("batches_per_iteration", 1)
+        n_policy_batches = self.policy_config.learning.get("batches_per_iteration", 1)
         pbar = tqdm(range(n_policy_batches), desc=f"{'training policy model':30}")
         for batch in pbar:
             policy_result = self.policy_model.train_fn(
                 self.memory,
                 self.transition_model,
                 self.env.call('get_loss_gain')[0],
-                self.policy_batch_size,
-                **self.policy_config.get("train_fn", {})
+                **self.policy_config.get("learning", {}).get("params", {})
             )
             self.policy_updates += 1
             loss = policy_result['policy model loss']
@@ -208,89 +222,133 @@ class PredictiveControlAgent(BaseAgent):
     def train(self, epochs: int = 1):
         
         for e in range(epochs):
-            self.train_epoch()
+            transition_results, policy_results = self.train_epoch()
 
-    def test(self, env: Optional[gym.vector.VectorEnv] = None, episodes: int = 1, render: bool = False):
+            self.epochs += 1
+            
+            # collect the training results
+            results = {
+                "steps": self.steps,
+                "episodes": self.episodes,
+                "epochs": self.epochs,
+                "policy updates": self.policy_updates,
+                "transition updates": self.transition_updates,
+            }
+            results.update(dict_mean(transition_results))
+            results.update(dict_mean(policy_results))
+
+            # log the results
+            self.log(results, step=self.epochs)
+
+    def test(self, env: Optional[gym.vector.VectorEnv] = None, render: bool = False):
         
         if env is None:
-            env = self.env
+            env = self.env if self.eval_env is None else self.eval_env
 
         self.policy_model.eval()
 
-        with torch.no_grad():
-                
-                for e in range(episodes):
-                    observations, infos = env.reset()
-                    obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
-                    targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
-    
-                    self.policy_model.reset_state()
-    
-                    total_reward = 0
-                    done = False
-                    while not done:
-                        if render:
-                            env.render()
-    
-                        action = self.policy_model.predict(obs, targets)
-                        action = action.squeeze(0).clamp(-1, 1).detach()
-    
-                        observations, rewards, terminates, truncateds, infos = env.step(action.cpu().numpy())
-                        obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
-                        targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
-    
-                        if '_final_observation' in infos.keys():
-                            final = infos['_final_observation']
-                            for i, f in enumerate(final):
-                                if f:
-                                    obs[i] = torch.tensor(infos['final_observation'][i]['proprio'], device=self.device, dtype=torch.float32)
-                                    targets[i] = torch.tensor(infos['final_observation'][i]['target'], device=self.device, dtype=torch.float32)
-    
-                        total_reward += sum(rewards) / env.num_envs
-                        done = True if terminates[0] or truncateds[0] else False
+        with torch.no_grad():        
+            observations, infos = env.reset()
+            obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
+            targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
+
+            self.policy_model.reset_state()
+
+            total_reward = 0
+            done = False
+            while not done:
+                if render:
+                    env.render()
+
+                action = self.policy_model.predict(obs, targets)
+                action = action.squeeze(0).clamp(-1, 1).detach()
+
+                observations, rewards, terminates, truncateds, infos = env.step(action.cpu().numpy())
+                obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
+                targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
+
+                if '_final_observation' in infos.keys():
+                    final = infos['_final_observation']
+                    for i, f in enumerate(final):
+                        if f:
+                            obs[i] = torch.tensor(infos['final_observation'][i]['proprio'], device=self.device, dtype=torch.float32)
+                            targets[i] = torch.tensor(infos['final_observation'][i]['target'], device=self.device, dtype=torch.float32)
+
+                total_reward += sum(rewards) / env.num_envs
+                done = True if terminates[0] or truncateds[0] else False
 
     def save_models(self):
 
         self.save_transition_model()
         self.save_policy_model()
 
-    def save_transition_model(self):
+    def save_transition_model(
+            self, 
+            dir: Optional[str] = None,
+            file: str = "transition_model.cpt", 
+            save_optimizer: bool = True
+        ):
+
+        if dir is None:
+            dir = Path(self.dir, "models")
 
         self.save(
-            self.transition_model,
-            self.run_config.get("save_path", "") + "transition_model.cpt",
-            self.transition_model.get_optimizer()
+            model=self.transition_model,
+            dir=dir,
+            file=file,
+            optimizer=self.transition_model.get_optimizer() if save_optimizer else None
         )
 
-    def save_policy_model(self):
+    def save_policy_model(            
+            self, 
+            dir: Optional[str] = None,
+            file: str = "policy_model.cpt", 
+            save_optimizer: bool = True
+        ):
+
+        if dir is None:
+            dir = Path(self.dir, "models")
 
         self.save(
-            self.policy_model,
-            self.run_config.get("save_path", "") + "policy_model.cpt",
-            self.policy_model.get_optimizer()
+            model=self.policy_model,
+            dir=dir,
+            file=file,
+            optimizer=self.policy_model.get_optimizer() if save_optimizer else None
         )
     
-    def load_models(self):
+    def load_models(self, dir: Optional[str] = None):
 
-        self.load_transition_model()
-        self.load_policy_model()
+        self.load_transition_model(dir)
+        self.load_policy_model(dir)
 
-    def load_transition_model(self):
+    def load_transition_model(self, dir: Optional[str] = None, file: str = "transition_model.cpt"):
+
+        if dir is None:
+            dir = self.run_config.get("load_path", None)
+            assert dir is not None, "No load path specified!"
+            dir = Path(dir)
+        path = Path(dir, file)
 
         self.transition_model, op = self.load(
-            self.transition_model,
-            self.run_config.get("load_path", "") + "transition_model.cpt",
-            self.transition_model.get_optimizer()
+            model=self.transition_model,
+            path=path,
+            optim=self.transition_model.get_optimizer()
         )
         if op is not None:
             self.transition_model.set_optimizer(op)
     
-    def load_policy_model(self):
+    def load_policy_model(self, dir: Optional[str] = None, file: str = "policy_model.cpt"):
+
+        if dir is None:
+            dir = self.run_config.get("load_path", None)
+            assert dir is not None, "No load path specified!"
+            dir = Path(dir)
+        path = Path(dir, file)
 
         self.policy_model, op = self.load(
-            self.policy_model,
-            self.run_config.get("load_path", "") + "policy_model.cpt",
-            self.policy_model.get_optimizer()
+            model=self.policy_model,
+            path=path,
+            optim=self.policy_model.get_optimizer()
         )
         if op is not None:
             self.policy_model.set_optimizer(op)
