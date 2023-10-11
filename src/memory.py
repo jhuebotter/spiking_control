@@ -35,6 +35,9 @@ class Episode:
     def append(self, transition: Transition) -> None:
         self.steps_.append(transition)
 
+    def get_cummulative_reward(self) -> float:
+        return sum([step.reward for step in self.steps_])
+
     def __len__(self) -> int:
         return len(self.steps_)
     

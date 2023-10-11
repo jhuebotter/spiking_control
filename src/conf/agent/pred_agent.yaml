@@ -4,4 +4,5 @@ memory:
     max_size: 100
 
 steps_per_iteration: 5000
+steps_per_evaluation: 1600
 reset_memory: True

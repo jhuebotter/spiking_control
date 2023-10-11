@@ -5,6 +5,27 @@ import numpy as np
 from .extratyping import *
 from pathlib import Path
 from datetime import datetime
+from dataclasses import dataclass, field
+
+
+@dataclass
+class FrameStack:
+    frames: list[np.ndarray] = field(default_factory=list)
+
+    def append(self, frame: np.ndarray) -> None:
+        self.frames.append(frame)
+
+    def reset(self) -> None:
+        self.frames = []
+
+    def get(self) -> np.ndarray:
+        return np.stack(self.frames, axis=0)
+
+    def __getitem__(self, index: int) -> np.ndarray:
+        return self.frames[index]
+
+    def __len__(self) -> int:
+        return len(self.frames)
 
 
 def make_output_dir() -> Path:

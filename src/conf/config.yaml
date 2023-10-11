@@ -14,7 +14,8 @@ task:
   num_envs: 25
   num_eval_envs: 8
   params:
-    render_mode: human
+    render_mode: rgb_array
 
 run:
-  load_path: null
+  load_dir: null
+  render_every: 2

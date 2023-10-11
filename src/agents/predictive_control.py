@@ -7,7 +7,8 @@ from ..models import (
 from ..utils import (
     make_optimizer,
     conf_to_dict,
-    dict_mean
+    dict_mean,
+    FrameStack
 )
 
 import gymnasium as gym
@@ -47,6 +48,7 @@ class PredictiveControlAgent(BaseAgent):
         # training parameters
         self.reset_memory = config.agent.reset_memory
         self.steps_per_iteration = config.agent.steps_per_iteration
+        self.steps_per_evaluation = config.agent.steps_per_evaluation
         self.transition_batches_per_iteration = self.transition_config.learning.params.get("batches_per_iteration", 1)
         self.transition_batch_size = self.transition_config.learning.params.get("batch_size", 128)
         self.policy_batches_per_iteration = self.policy_config.learning.params.get("batches_per_iteration", 1)
@@ -102,7 +104,11 @@ class PredictiveControlAgent(BaseAgent):
         while self.steps < total_steps:
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()
-            self.test()
+            if self.iterations % self.run_config.get("render_every", 1) == 0:
+                render = True
+            else:
+                render = False
+            self.test(steps=self.steps_per_evaluation, render=render)
             self.save_models()
             self.iterations += 1
 
@@ -112,10 +118,11 @@ class PredictiveControlAgent(BaseAgent):
         
         self.policy_model.eval()
 
-        self.memory.reset() if reset_memory else None
+        if reset_memory: self.memory.reset()
 
-        step = 0
         num_envs = self.env.num_envs
+
+        episodes = [Episode() for _ in range(num_envs)]
 
         action_min = torch.tensor(self.env.action_space.low, device=self.device)
         action_max = torch.tensor(self.env.action_space.high, device=self.device)
@@ -129,8 +136,7 @@ class PredictiveControlAgent(BaseAgent):
 
             self.policy_model.reset_state()
 
-            episodes = [Episode() for _ in range(num_envs)]
-            
+            step = 0
             with tqdm(
                 total=steps,
                 desc=f"{'obtaining experience':30}",
@@ -146,14 +152,11 @@ class PredictiveControlAgent(BaseAgent):
 
                     dones = [True if ter or tru else False for ter, tru in zip(terminates, truncateds)]
                     next_obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
-                    #next_targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
-
                     if '_final_observation' in infos.keys():
                         final = infos['_final_observation']
                         for i, f in enumerate(final):
                             if f:
                                 next_obs[i] = torch.tensor(infos['final_observation'][i]['proprio'], device=self.device, dtype=torch.float32)
-                                #next_targets[i] = torch.tensor(infos['final_observation'][i]['target'], device=self.device, dtype=torch.float32)
 
                     # store the transition
                     for i, (o, t, a, r, d, no) in enumerate(zip(obs, targets, actions, rewards, dones, next_obs)):
@@ -240,42 +243,89 @@ class PredictiveControlAgent(BaseAgent):
             # log the results
             self.log(results, step=self.epochs)
 
-    def test(self, env: Optional[gym.vector.VectorEnv] = None, render: bool = False):
+    def test(self, steps: int, env: Optional[gym.vector.VectorEnv] = None, render: bool = False):
         
         if env is None:
             env = self.env if self.eval_env is None else self.eval_env
 
-        self.policy_model.eval()
+        num_envs = env.num_envs
 
-        with torch.no_grad():        
-            observations, infos = env.reset()
-            obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
-            targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
+        action_min = torch.tensor(env.action_space.low, device=self.device)
+        action_max = torch.tensor(env.action_space.high, device=self.device)
 
+        observations, infos = env.reset()
+        obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
+        targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
+
+        completed_episodes = []
+        episodes = [Episode() for _ in range(num_envs)]
+
+        if render:
+            completed_framestacks = []
+            framestacks = [FrameStack() for _ in range(num_envs)]
+            frames = env.call('render')
+            for i, frame in enumerate(frames):
+                framestacks[i].append(frame)
+
+        with torch.no_grad(): 
+            self.policy_model.eval()       
             self.policy_model.reset_state()
 
+            step = 0
             total_reward = 0
-            done = False
-            while not done:
-                if render:
-                    env.render()
+            with tqdm(
+                total=steps,
+                desc=f"{'evaluating models':30}",
+            ) as pbar:
+                while step < steps:
 
-                action = self.policy_model.predict(obs, targets)
-                action = action.squeeze(0).clamp(-1, 1).detach()
+                    # predict the action
+                    actions = self.policy_model.predict(obs, targets)
+                    actions = actions.squeeze(0).clamp(action_min, action_max).detach()
 
-                observations, rewards, terminates, truncateds, infos = env.step(action.cpu().numpy())
-                obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
-                targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
+                    # step the environment
+                    observations, rewards, terminates, truncateds, infos = env.step(actions.cpu().numpy())
 
-                if '_final_observation' in infos.keys():
-                    final = infos['_final_observation']
-                    for i, f in enumerate(final):
-                        if f:
-                            obs[i] = torch.tensor(infos['final_observation'][i]['proprio'], device=self.device, dtype=torch.float32)
-                            targets[i] = torch.tensor(infos['final_observation'][i]['target'], device=self.device, dtype=torch.float32)
+                    dones = [True if ter or tru else False for ter, tru in zip(terminates, truncateds)]
+                    next_obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
+                    if '_final_observation' in infos.keys():
+                        final = infos['_final_observation']
+                        for i, f in enumerate(final):
+                            if f:
+                                next_obs[i] = torch.tensor(infos['final_observation'][i]['proprio'], device=self.device, dtype=torch.float32)
 
-                total_reward += sum(rewards) / env.num_envs
-                done = True if terminates[0] or truncateds[0] else False
+                    # store the transition
+                    for i, (o, t, a, r, d, no) in enumerate(zip(obs, targets, actions, rewards, dones, next_obs)):
+                        episodes[i].append(Transition(o, t, a, r, d, no))
+                        if d:
+                            completed_episodes.append(episodes[i])
+                            total_reward += episodes[i].get_cummulative_reward()
+                            episodes[i] = Episode()
+
+                    # store frames for rendering
+                    if render:
+                        frames = env.call('render')
+                        for i, frame in enumerate(frames):
+                            if dones[i]:
+                                completed_framestacks.append(framestacks[i])
+                                framestacks[i] = FrameStack()
+                            framestacks[i].append(frame)
+
+                    # update the state
+                    obs = torch.tensor(observations['proprio'], device=self.device, dtype=torch.float32)
+                    targets = torch.tensor(observations['target'], device=self.device, dtype=torch.float32)
+
+                    step += num_envs
+                    pbar.update(num_envs)
+
+        # make the video
+        if render:
+            pass
+            #make_video(completed_framestacks, self.dir, f"test_{self.epochs}.mp4")
+
+        # log the results
+        average_reward = total_reward / len(completed_episodes)
+
 
     def save_models(self):
 
