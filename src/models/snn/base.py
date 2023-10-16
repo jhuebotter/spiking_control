@@ -32,7 +32,7 @@ from control_stork.plotting import (
 )
 from control_stork.activations import SigmoidSpike
 from control_stork.layers import Layer
-from src.extratyping import *
+from src.extratypes import *
 
 
 class BaseRSNN(torch.nn.Module):

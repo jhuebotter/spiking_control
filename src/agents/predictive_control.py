@@ -375,8 +375,8 @@ class PredictiveControlAgent(BaseAgent):
 
         if dir is None:
             dir = self.run_config.get("load_path", None)
-            assert dir is not None, "No load path specified!"
-            dir = Path(dir)
+        assert dir is not None, "No load path specified!"
+        dir = Path(dir)
         path = Path(dir, file)
 
         self.transition_model, op = self.load(

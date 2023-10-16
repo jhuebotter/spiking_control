@@ -4,7 +4,7 @@ from control_stork.nodes import FastLIFGroup
 from . import BaseRSNN
 from src.memory import EpisodeMemory
 from src.utils import get_grad_norm
-from src.extratyping import *
+from src.extratypes import *
 
 
 class PolicyNetRSNN(BaseRSNN):

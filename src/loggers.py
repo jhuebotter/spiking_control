@@ -1,5 +1,5 @@
 import wandb
-from .extratyping import *
+from .extratypes import *
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -58,7 +58,18 @@ class BaseLogger:
         """
         raise NotImplementedError
     
-    def is_figure(val) -> bool:
+    def is_value(self, val) -> bool:
+        """detect if the value is int, float, str, or bool
+        Args:
+            val (any): value
+        
+        Returns:
+            bool: True if the value is int, float, str, or bool, else False
+        """
+
+        return isinstance(val, (int, float, str, bool, np.number))
+    
+    def is_figure(self, val) -> bool:
         """detect if the value is a matplotlib figure or an image
         Args:
             val (any): value
@@ -107,7 +118,7 @@ class WandBLogger(BaseLogger):
             if isinstance(val, dict):
                 self.log(val, prefix=key)
             # if the value is int, float, str, or bool, log it
-            elif isinstance(val, (int, float, str, bool)):
+            elif self.is_value(val):
                 self.log_data(key, val)
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
@@ -143,7 +154,7 @@ class WandBLogger(BaseLogger):
             if isinstance(val, dict):
                 self.log_dict(val, prefix=key)
             # if the value is int, float, str, or bool, log it
-            elif isinstance(val, (int, float, str, bool)):
+            elif self.is_value(val):
                 self.log_data(key, val)
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
@@ -162,12 +173,12 @@ class WandBLogger(BaseLogger):
             value (int, float, str, bool, torch.Tensor, np.ndarray, wandb.Image, wandb.Video): value
         
         Raises:
-            ValueError: if the value is not of type int, float, str, bool, torch.Tensor, np.ndarray, wandb.Image, or wandb.Video
+            ValueError: if the value is not of type int, float, str, bool, torch.Tensor, np.ndarray, np.number, wandb.Image, or wandb.Video
         """
 
         assert isinstance(key, str), "key must be a string"
-        assert isinstance(value, (int, float, str, bool, torch.Tensor, np.ndarray, wandb.Image, wandb.Video)), \
-            "value must be an int, float, str, bool, torch.Tensor, np.ndarray, wandb.Image or wandb.Video"
+        assert isinstance(value, (int, float, str, bool, torch.Tensor, np.ndarray, np.number, wandb.Image, wandb.Video)), \
+            "value must be an int, float, str, bool, torch.Tensor, np.ndarray, np.number, wandb.Image or wandb.Video"
         self.run.log({key: value}, step=self.step_)
 
 
@@ -218,6 +229,8 @@ class PandasLogger(BaseLogger):
         self.reset_local_data()
         self.max_attempts = 60
 
+        # TODO: also log run parameters
+
     def log_data(self, key: str, value) -> None:
         """ log data to pandas dataframe
         Args:
@@ -232,7 +245,7 @@ class PandasLogger(BaseLogger):
         """
 
         assert isinstance(key, str), "key must be a string"
-        assert isinstance(value, (int, float, str, bool)), \
+        assert self.is_value(value), \
             "value must be an int, float, str, or bool"
         self.data[key] = value
 
@@ -253,9 +266,8 @@ class PandasLogger(BaseLogger):
         assert isinstance(data, dict), "data must be a dict"
 
         # check if the step has changed
-        if step is not None:
-            if self.get_step() < step and self.data != {'step': self.get_step()}:
-                self.save_to_file()
+        if step is not None and self.get_step() < step:
+            self.save_to_file()
             self.set_step(step)
             self.reset_local_data()
 
@@ -266,7 +278,7 @@ class PandasLogger(BaseLogger):
             if isinstance(val, dict):
                 self.log(val, prefix=key)
             # if the value is int, float, str, or bool, log it
-            elif isinstance(val, (int, float, str, bool)):
+            elif self.is_value(val):
                 self.log_data(key, val)
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
@@ -303,7 +315,7 @@ class PandasLogger(BaseLogger):
             if isinstance(val, dict):
                 self.log(val, prefix=key)
             # if the value is int, float, str, or bool, log it
-            elif isinstance(val, (int, float, str, bool)):
+            elif self.is_value(val):
                 self.log_data(key, val)
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
@@ -367,3 +379,144 @@ class PandasLogger(BaseLogger):
     def reset_local_data(self) -> None:
         """reset the local dataframe"""
         self.data = {'step': self.get_step()}
+
+
+
+class MediaLogger(BaseLogger):
+    """media logger class"""
+    def __init__(
+            self,
+            dir: str,
+        ) -> None:
+        
+        super().__init__()
+        self.dir = Path(dir, "media")
+        self.dir.mkdir(parents=True, exist_ok=True)
+        print("media will be saved at", self.dir)
+
+        # TODO: extend to save videos
+
+    def log_data(self, key: str, value) -> None:
+        """ log data to pandas dataframe
+        Args:
+            key (str): key
+            value (int, float, str, bool): value
+        
+        Raises:
+            ValueError: if the value is not of type int, float, str, or bool
+
+        Returns:
+            None
+        """
+
+        assert isinstance(key, str), "key must be a string"
+        assert self.is_figure(value), \
+            "value must be matplotlib figure or numpy array in image shape"
+
+        path = Path(self.dir, f"{key} {self.get_step()}.png")
+
+        if isinstance(value, plt.Figure):
+            self.save_to_file(value, path)
+            
+        elif isinstance(value, np.ndarray):
+            # convert np array to plt figure
+            fig = plt.figure()
+            plt.imshow(value)
+            plt.axis('off')
+            plt.tight_layout()
+            self.save_to_file(fig, path)
+            plt.close(fig)           
+
+    def log(self, data: dict, prefix: Optional[str] = None, step: Optional[int] = None) -> None:
+        """ log a dictionary to pandas dataframe
+        Args:
+            data (dict): data
+            prefix (Optional[str], optional): prefix. Defaults to None.
+            step (Optional[int], optional): step. Defaults to None.
+        
+        Raises:
+            ValueError: if the value is not of type dict
+            
+        Returns:
+            None
+        """
+
+        assert isinstance(data, dict), "data must be a dict"
+        assert isinstance(step, (int, None)), "step must be an int or None"
+
+        # check if the step has changed
+        if step is not None and self.get_step() < step:
+            self.set_step(step)
+
+        for key, val in data.items():
+            if prefix is not None:
+                key = f"{prefix} {key}"
+            # if the value is a dict, log it recursively
+            if isinstance(val, dict):
+                self.log(val, prefix=key)
+            # if the value is int, float, str, or bool, skip it
+            elif self.is_value(val):
+                pass
+            # if the value is a list or tuple, log it recursively
+            elif isinstance(val, (list, tuple)):
+                self.log_iterable(val, prefix=key)                    
+            # detect if the value is an image 
+            elif self.is_figure(val):
+                self.log_data(key, val)
+            # else throw an error
+            else:
+                raise ValueError(f"Cannot log data of type {type(data)}")
+
+    def log_iterable(self, data: Iterable, prefix: Optional[str] = None) -> None:
+        """ log an iterable to pandas dataframe
+        Args:
+            data (Iterable): data
+            prefix (Optional[str], optional): prefix. Defaults to None.
+        
+        Raises:
+            ValueError: if the value is not of type list or tuple
+
+        Returns:
+            None
+        """
+
+        assert isinstance(data, (list, tuple)), "data must be a list or tuple"
+
+        for i, val in enumerate(data):
+            if prefix is not None:
+                key = f"{prefix} {i}"
+            else:
+                key = f"{i}"
+            # if the value is a dict, log it recursively
+            if isinstance(val, dict):
+                self.log(val, prefix=key)
+            # if the value is int, float, str, or bool, log it
+            elif self.is_value(val):
+                pass
+            # if the value is a list or tuple, log it recursively
+            elif isinstance(val, (list, tuple)):
+                self.log_iterable(val, prefix=key)
+            # detect if the value is an image 
+            elif self.is_figure(val):
+                self.log_data(key, val)
+            # else throw an error
+            else:
+                raise ValueError(f"Cannot log data of type {type(data)}")
+
+    def save_to_file(self, image: plt.Figure, path: Union[str, Path]) -> None:
+        """save the dataframe to a file
+        Args:
+            path (str, optional): path. Defaults to None.
+
+        Returns:
+            None
+        """
+
+        path = Path(path)
+
+        # try to load the file
+        print("saving image at", path)
+        if path.exists():
+            print("updating existing image!")
+
+        image.savefig(path)

@@ -1,6 +1,6 @@
 import gymnasium as gym
 from gymnasium.vector import SyncVectorEnv
-from ..extratyping import *
+from ..extratypes import *
 
 
 def make_env(config: dict, seed: int = 0, eval: bool = False) -> gym.Env:

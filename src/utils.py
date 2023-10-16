@@ -1,8 +1,7 @@
-import gymnasium as gym
 import torch
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
-from .extratyping import *
+from .extratypes import *
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -49,12 +48,12 @@ def conf_to_dict(config: DictConfig) -> dict:
     return OmegaConf.to_container(config, resolve=True, throw_on_missing=True)
 
 
-def dict_mean(dict_list: list[dict[str, float]]) -> dict:
+def dict_mean(dict_list: list[dict[str, float]], prefix: str = '') -> dict:
     """for a list of dicts with the same keys and numeric values return
     a dict with the same keys and averaged values
     
     Args:
-        dict_list (list[dict[str, float]]): list of dictionaries
+        dict_list (list[dict[str, number]]): list of dictionaries with the same keys and numeric values
 
     Returns:
         dict: dictionary with averaged values    
@@ -62,8 +61,14 @@ def dict_mean(dict_list: list[dict[str, float]]) -> dict:
 
     mean_dict = {}
     if len(dict_list) > 0:
-        for key in dict_list[0].keys():
-            mean_dict[key] = np.mean([d[key] for d in dict_list], axis=0)
+        for key, value in dict_list[0].items():
+            new_key = f'{prefix}{key}'
+            if isinstance(value, (float, int, np.number)):
+                mean_dict[new_key] = np.mean([d[key] for d in dict_list])
+            elif isinstance(value, dict):
+                mean_dict[new_key] = dict_mean([d[key] for d in dict_list], prefix=f'{new_key}.')
+            elif isinstance(value, torch.Tensor):
+                mean_dict[new_key] = np.mean([d[key].numpy() for d in dict_list])
 
     return mean_dict
 
@@ -101,6 +106,20 @@ def get_device(device: str = 'cuda') -> torch.device:
     else:
         device = torch.device('cpu')
     return device
+
+
+def set_seed(seed: int = 0) -> None:
+    """(re)set the seed for torch, numpy and cudnn
+    Args:
+        seed (int, optional): seed. Defaults to 0.
+    
+    Returns:
+        None
+    """
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def make_optimizer(model: torch.nn.Module, config: dict) -> torch.optim.Optimizer:

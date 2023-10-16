@@ -4,7 +4,7 @@ from src.utils import (
     conf_to_dict,
     make_output_dir,
 )
-from src.extratyping import *
+from src.extratypes import *
 from omegaconf import DictConfig
 from gymnasium.vector import VectorEnv
 import torch

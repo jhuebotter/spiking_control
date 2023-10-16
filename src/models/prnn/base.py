@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.extratyping import *
+from src.extratypes import *
 
 
 class BasePRNN(nn.Module):

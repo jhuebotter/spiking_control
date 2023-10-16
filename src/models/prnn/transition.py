@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from .base import BasePRNN
 from src.memory import EpisodeMemory
 from src.utils import get_grad_norm
-from src.extratyping import *
+from src.extratypes import *
 
 
 class TransitionNetPRNN(BasePRNN):
