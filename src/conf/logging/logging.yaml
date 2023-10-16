@@ -2,7 +2,10 @@ defaults:
   - wandb: wandb
 
 console:
-  use: True
+  use: true
 
 pandas:
-  use: True
+  use: true
+
+media:
+  use: true

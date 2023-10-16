@@ -5,8 +5,6 @@ import celluloid
 import wandb
 import hydra
 from omegaconf import DictConfig, OmegaConf
-#OmegaConf.register_new_resolver("eval", eval)
-
 import gymnasium as gym
 import pygame
 import tqdm
@@ -30,6 +28,7 @@ from src.envs import (
 from src.utils import (
     get_device,
     conf_to_dict,
+    set_seed,
 )
 
 from src.agents import PredictiveControlAgent
@@ -39,6 +38,7 @@ from src.loggers import (
     WandBLogger,
     ConsoleLogger,
     PandasLogger,
+    MediaLogger
 )
 
 
@@ -74,9 +74,14 @@ def main(cfg : DictConfig) -> None:
         print('pandas logger is used!')
         loggers.append(PandasLogger(out_dir))
 
+    # make a media logger
+    if cfg.logging.media.use:
+        print('media logger is used!')
+        loggers.append(MediaLogger(out_dir))
+
     # initialize wandb
     if cfg.logging.wandb.use:
-        print('wandb is used!')
+        print('wandb logger is used!')
         config_dict = conf_to_dict(cfg)
         run = wandb.init(
             project=cfg.logging.wandb.project, 
@@ -88,10 +93,13 @@ def main(cfg : DictConfig) -> None:
         Path(wandb.run.dir, "hydra-config.yaml").symlink_to(config_path)
         loggers.append(WandBLogger(run))
     else:
-        print('wandb is not used!')
+        print('wandb logger is not used!')
     
     # set the device
     device = get_device(cfg.device)
+
+    # set the seed
+    set_seed(cfg.seed)
 
     # make the environment
     env = make_env(cfg.task, cfg.seed)
@@ -115,14 +123,18 @@ def main(cfg : DictConfig) -> None:
             raise ValueError(f'load directory {load_dir} does not exist!')
         agent.load_models(load_dir)
 
-    agent.run(20_000)
+    # watch the model with wandb
+    if cfg.logging.wandb.use:
+        wandb.watch(agent.model)
+
+    agent.run(cfg.learning.total_steps)
 
     #agent.save_models()
 
-    # close the environment
+    # finish the run
     env.close()
-
-    wandb.finish()
+    if cfg.logging.wandb.use:
+        wandb.finish()
     exit()
 
     # test the environment
