@@ -15,8 +15,10 @@ class Transition:
     next_state: Tensor
 
     def __getitem__(self, key: str) -> Tensor:
-        return torch.tensor(getattr(self, key))
-    
+        if key in ['reward', 'done']:
+            return torch.tensor(self.reward)
+        return getattr(self, key).clone().detach()
+
     def as_dict(self) -> dict[str, Tensor]:
         return {
             'state': self.state,

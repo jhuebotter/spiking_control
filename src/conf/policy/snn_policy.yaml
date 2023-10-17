@@ -3,8 +3,8 @@ defaults:
 
 model:
   params:
-    num_rec_layers: 1
-    num_ff_layers: 1
+    num_rec_layers: 0
+    num_ff_layers: 2
 
 learning:
   params:

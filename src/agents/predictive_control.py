@@ -6,7 +6,7 @@ from ..models import (
 )
 from ..utils import (
     make_optimizer,
-    conf_to_dict,
+    # conf_to_dict,
     dict_mean,
     FrameStack
 )
@@ -54,6 +54,9 @@ class PredictiveControlAgent(BaseAgent):
         self.policy_batches_per_iteration = self.policy_config.learning.params.get("batches_per_iteration", 1)
         self.policy_batch_size = self.policy_config.learning.params.get("batch_size", 128)
 
+        # plotting parameters
+        # self.plot_eval = self.run_config.plot_eval
+
         # initialize dimensions
         self.action_dim = env.action_space.shape[1]
         self.state_dim = env.observation_space['proprio'].shape[1]
@@ -70,15 +73,16 @@ class PredictiveControlAgent(BaseAgent):
         self.transition_model = make_transition_model(
             action_dim = self.action_dim, 
             state_dim = self.state_dim, 
-            config = conf_to_dict(self.transition_config.get("model", {}))
+            config = self.transition_config.model
         ).to(self.device)
 
         self.policy_model = make_policy_model(
             action_dim = self.action_dim,
             state_dim = self.state_dim,
             target_dim = self.target_dim,
-            config = conf_to_dict(self.policy_config.get("model", {}))
+            config = self.policy_config.model
         ).to(self.device)
+        self.models = [self.transition_model, self.policy_model]
 
         # initialize optimizers
         self.transition_model.set_optimizer(make_optimizer(
@@ -104,10 +108,7 @@ class PredictiveControlAgent(BaseAgent):
         while self.steps < total_steps:
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()
-            if self.iterations % self.run_config.get("render_every", 1) == 0:
-                render = True
-            else:
-                render = False
+            render = (self.iterations % self.run_config.get("render_every", 1)) == 0
             self.test(steps=self.steps_per_evaluation, render=render)
             self.save_models()
             self.iterations += 1
@@ -137,6 +138,7 @@ class PredictiveControlAgent(BaseAgent):
             self.policy_model.reset_state()
 
             step = 0
+            total_reward = 0
             with tqdm(
                 total=steps,
                 desc=f"{'obtaining experience':30}",
@@ -164,6 +166,7 @@ class PredictiveControlAgent(BaseAgent):
                         if d:
                             # ! This only adds complete episodes to the memory
                             self.memory.append(episodes[i])
+                            total_reward += episodes[i].get_cummulative_reward()
                             episodes[i] = Episode()
                             self.episodes += 1
 
@@ -175,14 +178,12 @@ class PredictiveControlAgent(BaseAgent):
                     pbar.update(num_envs)
 
         self.steps += step
+        average_reward = total_reward / len(episodes)
+        results = {
+            "average reward": average_reward,
+        }
 
-    def train_epoch(self):
 
-        # train the models
-        transition_results = self.train_transition_model()
-        policy_results = self.train_policy_model()
-
-        return transition_results, policy_results
 
     def train_transition_model(self):
 
@@ -192,11 +193,13 @@ class PredictiveControlAgent(BaseAgent):
         pbar = tqdm(range(n_transition_batches), desc=f"{'training transition model':30}")
         for batch in pbar:
             transition_result = self.transition_model.train_fn(
-                self.memory,
+                memory = self.memory,
+                record = True,
+                excluded_monitor_keys = self.transition_model.plot_monitors,
                 **self.transition_config.get("learning", {}).get("params", {})
             )
             self.transition_updates += 1
-            loss = transition_result['transition model loss']
+            loss = transition_result['loss']
             pbar.set_postfix_str(f"loss: {loss:.5f}")
             transition_results.append(transition_result)
 
@@ -210,17 +213,27 @@ class PredictiveControlAgent(BaseAgent):
         pbar = tqdm(range(n_policy_batches), desc=f"{'training policy model':30}")
         for batch in pbar:
             policy_result = self.policy_model.train_fn(
-                self.memory,
-                self.transition_model,
-                self.env.call('get_loss_gain')[0],
+                memory = self.memory,
+                transition_model = self.transition_model,
+                loss_gain = self.env.call('get_loss_gain')[0],
+                record = True,
+                excluded_monitor_keys = self.policy_model.plot_monitors,
                 **self.policy_config.get("learning", {}).get("params", {})
             )
             self.policy_updates += 1
-            loss = policy_result['policy model loss']
+            loss = policy_result['loss']
             pbar.set_postfix_str(f"loss: {loss:.5f}")
             policy_results.append(policy_result)
 
         return policy_results
+    
+    def train_epoch(self):
+
+        # train the models
+        transition_results = self.train_transition_model()
+        policy_results = self.train_policy_model()
+
+        return transition_results, policy_results
 
     def train(self, epochs: int = 1):
         
@@ -234,11 +247,11 @@ class PredictiveControlAgent(BaseAgent):
                 "steps": self.steps,
                 "episodes": self.episodes,
                 "epochs": self.epochs,
-                "policy updates": self.policy_updates,
-                "transition updates": self.transition_updates,
+                "policy model updates": self.policy_updates,
+                "transition model updates": self.transition_updates,
             }
-            results.update(dict_mean(transition_results))
-            results.update(dict_mean(policy_results))
+            results.update(dict_mean(transition_results, prefix=self.transition_model.name + " "))
+            results.update(dict_mean(policy_results, prefix=self.policy_model.name + " "))
 
             # log the results
             self.log(results, step=self.epochs)
@@ -280,7 +293,7 @@ class PredictiveControlAgent(BaseAgent):
                 while step < steps:
 
                     # predict the action
-                    actions = self.policy_model.predict(obs, targets)
+                    actions = self.policy_model.predict(obs, targets, record=True)
                     actions = actions.squeeze(0).clamp(action_min, action_max).detach()
 
                     # step the environment
@@ -318,14 +331,19 @@ class PredictiveControlAgent(BaseAgent):
                     step += num_envs
                     pbar.update(num_envs)
 
-        # make the video
-        if render:
-            pass
-            #make_video(completed_framestacks, self.dir, f"test_{self.epochs}.mp4")
-
         # log the results
         average_reward = total_reward / len(completed_episodes)
+        results = {
+            "average reward": average_reward,
+        }
 
+        # make the video
+        if render:
+            #make_video(completed_framestacks, self.dir, f"test_{self.epochs}.mp4")
+            plots = self.policy_model.get_monitor_data(exclude=self.policy_model.numeric_monitors)
+            results.update(plots)
+
+        self.log(results, step=self.epochs)
 
     def save_models(self):
 

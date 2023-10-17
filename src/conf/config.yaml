@@ -1,14 +1,20 @@
 defaults:
   - task: reacher
   - agent: pred_agent
-  - policy: prnn_policy
-  - transition: prnn_transition
+  - policy: snn_policy
+  - transition: snn_transition
   - logging: logging
   - _self_
 
 seed: 42
 experiment: default
 device: cuda
+
+model:
+  time:
+    dt: 0.002
+    tau_mem: 0.02
+    tau_syn: 0.01
 
 task:
   num_envs: 25
@@ -18,7 +24,7 @@ task:
 
 run:
   load_dir: null
-  render_every: 2
+  render_every: 10
 
 learning:
-  total_steps: 20_000
+  total_steps: 400_000

@@ -21,7 +21,7 @@ class TransitionNetPRNN(BasePRNN):
             act_fn: Callable = F.leaky_relu,
             device: Union[str, torch.device] = "cpu",
             dtype: torch.dtype = torch.float,
-            name: str = "PolicyNet",
+            name: str = "transition model",
             **kwargs
         ) -> None:
 
@@ -49,7 +49,9 @@ class TransitionNetPRNN(BasePRNN):
             warmup_steps: int = 5,
             unroll_steps: int = 1,
             autoregressive: bool = False,
-            max_norm: Optional[float] = None
+            max_norm: Optional[float] = None,
+            record: bool = False,
+            excluded_monitor_keys: Optional[list[str]] = None,
         ) -> dict:
 
         # sample a batch of transitions
@@ -77,7 +79,7 @@ class TransitionNetPRNN(BasePRNN):
 
         # warmup the model
         if warmup_steps:
-            self(states[:warmup_steps], actions[:warmup_steps])
+            self(states[:warmup_steps], actions[:warmup_steps], record=record)
         state = states[warmup_steps]
 
         # unroll the model
@@ -85,7 +87,7 @@ class TransitionNetPRNN(BasePRNN):
             action = actions[warmup_steps + i]
             next_state = next_states[warmup_steps + i]
             # compute the prediction
-            next_state_hat_delta_mu, next_state_hat_delta_logvar = self(state, action)
+            next_state_hat_delta_mu, next_state_hat_delta_logvar = self(state, action, record=record)
             next_state_hat_mu = state + next_state_hat_delta_mu
             # compute the loss
             prediction_loss += self.criterion(next_state_hat_mu, next_state, next_state_hat_delta_logvar)
@@ -109,11 +111,15 @@ class TransitionNetPRNN(BasePRNN):
         self.optimizer.step()
 
         result = {
-            "transition model loss": loss.item(),
-            "transition model prediction loss": prediction_loss.item(),
-            "transition model reg loss": reg_loss.item(),
-            "transition model grad norm": grad_norm,
-            "transition model clipped grad norm": clipped_grad_norm,
+            "loss": loss.item(),
+            "prediction loss": prediction_loss.item(),
+            "reg loss": reg_loss.item(),
+            "grad norm": grad_norm,
+            "clipped grad norm": clipped_grad_norm,
         }
+
+        if record:
+            monitor_data = self.get_monitor_data(exclude=excluded_monitor_keys)
+            result.update(monitor_data)
 
         return result

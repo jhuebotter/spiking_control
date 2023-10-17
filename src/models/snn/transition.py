@@ -1,6 +1,16 @@
 import torch
 from control_stork.activations import SigmoidSpike
-from control_stork.nodes import FastLIFGroup
+from control_stork.nodes import (
+    CellGroup,
+    InputGroup,
+    FastLIFGroup,
+    FastReadoutGroup,
+)
+from control_stork.initializers import (
+    Initializer,
+    FluctuationDrivenCenteredNormalInitializer,
+)
+from control_stork.connections import Connection
 from . import BaseRSNN
 from src.memory import EpisodeMemory
 from src.utils import get_grad_norm
@@ -15,17 +25,22 @@ class TransitionNetRSNN(BaseRSNN):
         hidden_dim: int,
         num_rec_layers: int = 1,
         num_ff_layers: int = 1,
+        dt: float = 1e-3,
         repeat_input: int = 1,
         out_style: str = "last",
-        dt: float = 0.001,
-        device=None,
-        dtype=None,
-        flif_kwargs: dict = {},
+        input_type: CellGroup = InputGroup,
+        input_kwargs: dict = {},
+        neuron_type: CellGroup = FastLIFGroup,
+        neuron_kwargs: dict = {},
+        readout_type: CellGroup = FastReadoutGroup,
         readout_kwargs: dict = {},
-        neuron_type=FastLIFGroup,
-        act_fn=SigmoidSpike,
-        connection_dims: Optional[int] = None,
-        nu: float = 50,
+        connection_type: Connection = Connection,
+        connection_kwargs: dict = {},
+        activation: torch.nn.Module = SigmoidSpike,
+        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(nu=200, sigma_u=1.0, time_step=1e-3),
+        regularizers: list = [],
+        w_regularizers: list = [],
+        device=None,
         **kwargs,
     ) -> None:
         
@@ -38,18 +53,23 @@ class TransitionNetRSNN(BaseRSNN):
             hidden_dim=hidden_dim,
             num_rec_layers=num_rec_layers,
             num_ff_layers=num_ff_layers,
+            dt=dt,
             repeat_input=repeat_input,
             out_style=out_style,
-            dt=dt,
-            device=device,
-            dtype=dtype,
-            flif_kwargs=flif_kwargs,
-            readout_kwargs=readout_kwargs,
+            input_type=input_type,
+            input_kwargs=input_kwargs,
             neuron_type=neuron_type,
-            act_fn=act_fn,
-            connection_dims=connection_dims,
-            nu=nu,
-            name="TransitionNet",
+            neuron_kwargs=neuron_kwargs,
+            readout_type=readout_type,
+            readout_kwargs=readout_kwargs,
+            connection_type=connection_type,
+            connection_kwargs=connection_kwargs,
+            activation=activation,
+            initializer=initializer,
+            regularizers=regularizers,
+            w_regularizers=w_regularizers,
+            device=device,
+            name="transition model",
             **kwargs,
         )
 
@@ -122,11 +142,11 @@ class TransitionNetRSNN(BaseRSNN):
         self.optimizer.step()
 
         result = {
-            "transition model loss": loss.item(),
-            "transition model prediction loss": prediction_loss.item(),
-            "transition model reg loss": reg_loss.item(),
-            "transition model grad norm": grad_norm,
-            "transition model clipped grad norm": clipped_grad_norm,
+            "loss": loss.item(),
+            "prediction loss": prediction_loss.item(),
+            "reg loss": reg_loss.item(),
+            "grad norm": grad_norm,
+            "clipped grad norm": clipped_grad_norm,
         }
 
         if record:

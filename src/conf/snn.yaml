@@ -2,25 +2,58 @@ model:
   type: rsnn
   params:
     hidden_dim: 1024
-    connection_dims: 20
-    dt: 0.002
+    dt: ${model.time.dt}
     repeat_input: 8
-    nu: 100
     out_style: last
-    lowerBoundL2Strength: 0.0
-    upperBoundL2Strength: 1.0
-    weightL2Strength: 0.0
-    activation_fn:
+    input:
+      type: input
+      kwargs: {}
+    neuron:
+      type: lif
+      kwargs:
+        tau_mem: ${model.time.tau_mem}
+        tau_syn: ${model.time.tau_syn}
+    readout:
+      type: readout
+      kwargs:
+        tau_mem: ${model.time.tau_mem}
+        tau_syn: ${model.time.tau_syn}
+        n_readouts: 20
+    connection:
+      type: bottleneck
+      kwargs:
+        bias: true
+        n_dims: 20
+    initializer:
+      type: normal
+      kwargs:
+        time_step: ${model.time.dt}
+        sigma_u: 1.0
+        nu: 100
+        bias_scale: 1.0
+        scaling: 1.0
+    activation:
       type: sigmoidspike
       activation_kwargs:
-        beta: 20.0
-        gamma: 1.0
-    flif_kwargs:
-      tau_mem: 0.02
-      tau_syn: 0.01
-      reset: sub
-    readout_kwargs:
-      n_pop: 25
+        beta: 25
+    regularization:
+      activity:
+        - type: LowerBoundL2
+          kwargs:
+            strength: 0.01
+            threshold: 0.1
+            basis: mem
+            dims: null
+        - type: UpperBoundL2
+          kwargs:
+            strength: 1.0
+            threshold: 0.3
+            basis: mem
+            dims: 1
+      weights:
+      - type: L2
+        kwargs:
+          strength: 0.005
 
 optimizer:
   type: smorms3

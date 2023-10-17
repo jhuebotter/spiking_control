@@ -22,7 +22,7 @@ class PolicyNetPRNN(BasePRNN):
             act_fn: Callable = F.leaky_relu,
             device: Union[str, torch.device] = "cpu",
             dtype: torch.dtype = torch.float,
-            name: str = "PolicyNet",
+            name: str = "policy model",
             **kwargs
         ) -> None:
 
@@ -76,7 +76,9 @@ class PolicyNetPRNN(BasePRNN):
             max_norm: Optional[float] = None,
             deterministic_transition: bool = False,
             action_target_std: Optional[float] = None,
-            reg_scale: float = 1.0
+            reg_scale: float = 1.0,
+            record: bool = False,
+            excluded_monitor_keys: Optional[list[str]] = None,
     ) -> dict:
         
         # sample a batch of transitions
@@ -139,11 +141,15 @@ class PolicyNetPRNN(BasePRNN):
         self.optimizer.step()
 
         result = {
-            "policy model loss": loss.item(),
-            "policy model policy loss": policy_loss.item(),
-            "policy model reg_loss": reg_loss.item(),
-            "policy model grad norm": grad_norm,
-            "policy model clipped grad norm": clipped_grad_norm,
+            "loss": loss.item(),
+            "policy loss": policy_loss.item(),
+            "reg_loss": reg_loss.item(),
+            "grad norm": grad_norm,
+            "clipped grad norm": clipped_grad_norm,
         }
+
+        if record:
+            monitor_data = self.get_monitor_data(exclude=excluded_monitor_keys)
+            result.update(monitor_data)
 
         return result

@@ -15,13 +15,11 @@ class BasePRNN(nn.Module):
         num_rec_layers: int = 0,
         num_ff_layers: int = 1,
         bias: bool = True,
-        act_fn: Callable = F.leaky_relu,
+        activation: Callable = F.leaky_relu,
         device: Union[str, torch.device] = "cpu",
-        dtype: torch.dtype = torch.float,
         name: str = "PRNN",
         **kwargs,
     ) -> None:
-        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
 
         # set attributes
@@ -31,7 +29,7 @@ class BasePRNN(nn.Module):
         self.num_rec_layers = num_rec_layers
         self.num_ff_layers = num_ff_layers
         self.bias = bias
-        self.act_fn = act_fn
+        self.activation = activation
         self.name = name
         self.device = device
 
@@ -72,6 +70,10 @@ class BasePRNN(nn.Module):
 
     def update_state(self, h: Tensor) -> None:
         self.h = h
+
+    def get_monitor_data(self, exclude: list[str] = []) -> dict:
+        # currently no monitor data
+        return {}
 
     def get_reg_loss(self) -> Tensor:
         # currently no regularization
@@ -115,9 +117,9 @@ class BasePRNN(nn.Module):
         for name, layer in self.model.items():
             if "gru" in name.lower():
                 x, self.h = layer(x)
-                x = self.act_fn(x)
+                x = self.activation(x)
             elif "fc_ff" in name.lower():
-                x = self.act_fn(layer(x))
+                x = self.activation(layer(x))
 
         mu = self.model["fc_mu"](x)
         logvar = self.model["fc_var"](x)

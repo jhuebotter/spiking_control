@@ -2,7 +2,7 @@ model:
   type: prnn
   params:
     hidden_dim: 512
-    activation_fn: 
+    activation: 
       type: lrelu
 
 optimizer:

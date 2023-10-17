@@ -115,6 +115,9 @@ def main(cfg : DictConfig) -> None:
         eval_env=eval_env,
     )
 
+    print(agent.transition_model.name)
+    print(agent.policy_model.name)
+
     # load the models
     load_dir = cfg.run.load_dir
     if load_dir is not None:
@@ -125,7 +128,8 @@ def main(cfg : DictConfig) -> None:
 
     # watch the model with wandb
     if cfg.logging.wandb.use:
-        wandb.watch(agent.model)
+        for model in agent.models:
+            wandb.watch(model)
 
     agent.run(cfg.learning.total_steps)
 

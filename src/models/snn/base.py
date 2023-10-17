@@ -2,17 +2,16 @@ import torch
 from torch import Tensor
 from control_stork.models import RecurrentSpikingModel
 from control_stork.nodes import (
+    CellGroup,
     InputGroup,
     FastLIFGroup,
     FastReadoutGroup,
     DirectReadoutGroup,
     TimeAverageReadoutGroup,
 )
-from control_stork.connections import (
-    Connection,
-    BottleneckLinearConnection,
-)
+from control_stork.connections import Connection
 from control_stork.initializers import (
+    Initializer,
     FluctuationDrivenCenteredNormalInitializer,
     AverageInitializer,
 )
@@ -20,11 +19,6 @@ from control_stork.monitors import (
     PlotStateMonitor, 
     PopulationSpikeCountMonitor,
     ActiveNeuronMonitor,
-)
-from control_stork.regularizers import (
-    LowerBoundL2,
-    UpperBoundL2,
-    WeightL2Regularizer
 )
 from control_stork.plotting import (
     plot_spikes,
@@ -45,102 +39,60 @@ class BaseRSNN(torch.nn.Module):
         output_dim: int,
         num_rec_layers: int = 0,
         num_ff_layers: int = 1,
+        dt: float = 1e-3,
         repeat_input: int = 1,
         out_style: str = "last",
-        dt: float = 1e-3,
-        device=None,
-        dtype=None,
-        flif_kwargs: dict = {},
+        input_type: CellGroup = InputGroup,
+        input_kwargs: dict = {},
+        neuron_type: CellGroup = FastLIFGroup,
+        neuron_kwargs: dict = {},
+        readout_type: CellGroup = FastReadoutGroup,
         readout_kwargs: dict = {},
-        neuron_type=FastLIFGroup,
-        act_fn=SigmoidSpike,
-        connection_dims: Optional[int] = None,
-        nu: float = 50.0,
+        connection_type: Connection = Connection,
+        connection_kwargs: dict = {},
+        activation: torch.nn.Module = SigmoidSpike,
+        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(nu=200, sigma_u=1.0, time_step=1e-3),
+        regularizers: list = [],
+        w_regularizers: list = [],
+        device: torch.device = torch.device('cpu'),
         name: str = "RSNN",
-        **kwargs,
+        # **kwargs,
     ) -> None:
-        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
 
         # gather layer parameters
-        assert repeat_input >= 1
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
+        self.dt = dt
         self.num_rec_layers = num_rec_layers
         self.num_ff_layers = num_ff_layers
         self.repeat_input = repeat_input
+        self.input_type = input_type
+        self.input_kwargs = {**input_kwargs}
+        self.neuron_type = neuron_type
+        self.neuron_kwargs = {**neuron_kwargs}
+        self.readout_type = readout_type
+        self.readout_kwargs = {**readout_kwargs}
+        self.connection_type = connection_type
+        self.connection_kwargs = connection_kwargs
+        self.activation = activation
+        self.initializer = initializer
+        self.regularizers = regularizers
+        self.w_regularizers = w_regularizers
         assert out_style.lower() in ["mean", "last"]
         self.out_style = out_style.lower()
-        self.dt = dt
         self.device = device
-        self.dtype = dtype
-        self.nu = nu
         self.name = name
 
-        readout_kwargs = dict(**readout_kwargs)
-        readout_kwargs["n_readouts"] = readout_kwargs.get("n_pop", 1)
-        readout_kwargs["store_sequences"] = ["out"]
-
-        # handle regularization
-        regs = []
-        lowerBoundL2Strength = kwargs.get("lowerBoundL2Strength", 0.0)
-        lowerBoundL2Threshold = kwargs.get("lowerBoundL2Threshold", 1e-3)
-        upperBoundL2Strength = kwargs.get("upperBoundL2Strength", 0.0)
-        upperBoundL2Threshold = kwargs.get("upperBoundL2Threshold", 0.3)
-        if lowerBoundL2Strength > 0.0:
-            regLB = LowerBoundL2(
-                lowerBoundL2Strength, threshold=lowerBoundL2Threshold, dims=None
-            )
-            regs.append(regLB)
-        if upperBoundL2Strength > 0.0:
-            regUB = UpperBoundL2(
-                upperBoundL2Strength, threshold=upperBoundL2Threshold, dims=1
-            )
-            regs.append(regUB)
-
-        w_regs = []
-        weightL2Strength = kwargs.get("weightL2Strength", 0.0)
-        if weightL2Strength > 0.0:
-            regW = WeightL2Regularizer(weightL2Strength)
-            w_regs.append(regW)
-
-        # make the initializers
-        initializer = FluctuationDrivenCenteredNormalInitializer(
-            sigma_u=1.0,
-            nu=self.nu,
-            time_step=self.dt,
-        )
-
-        neuron_kwargs = dict(
-            tau_mem=flif_kwargs.get("V_tau_mean", 5e-3),
-            tau_syn=flif_kwargs.get("I_tau_mean", 2e-3),
-            activation=act_fn,
-            reset=flif_kwargs.get("reset", "sub"),
-            store_sequences=["out", "mem"],
-        )
-
-        if connection_dims in [None, 0]:
-            connection_class = Connection
-            connection_kwargs = dict(
-                bias=True,
-            )
-        else:
-            connection_class = BottleneckLinearConnection
-            connection_kwargs = dict(
-                bias=True,
-                n_dims=connection_dims,
-            )
-
-        if "V_tau_mean" not in readout_kwargs:
-            readout_kwargs["V_tau_mean"] = 5e-3
-        if "I_tau_mean" not in readout_kwargs:
-            readout_kwargs["I_tau_mean"] = 2e-3
+        self.input_kwargs['store_sequences'] = ['out']
+        self.neuron_kwargs['store_sequences'] = ['out', 'mem']
+        self.readout_kwargs['store_sequences'] = ['out', 'mem']
 
         # make the model
-        self.model = RecurrentSpikingModel(device=device, dtype=dtype)
+        self.model = RecurrentSpikingModel(device=device)
         input_group = prev = self.model.add_group(
-            InputGroup(self.input_dim, name=f"{self.name} Input Group")
+            self.input_type(self.input_dim, name=f"{self.name} Input Group", **self.input_kwargs)
         )
         first = True
         for i in range(num_rec_layers):
@@ -150,17 +102,17 @@ class BaseRSNN(torch.nn.Module):
                 size=self.hidden_dim,
                 input_group=prev,
                 recurrent=True,
-                regs=regs,
-                w_regs=w_regs,
-                connection_class=Connection if first else connection_class,
-                recurrent_connection_class=connection_class,
-                neuron_class=neuron_type,
-                neuron_kwargs=neuron_kwargs,
-                connection_kwargs=dict(bias=True) if first else connection_kwargs,
-                recurrent_connection_kwargs=connection_kwargs,
+                regs=self.regularizers,
+                w_regs=self.w_regularizers,
+                connection_class=Connection if first else self.connection_type,
+                recurrent_connection_class=self.connection_type,
+                neuron_class=self.neuron_type,
+                neuron_kwargs=self.neuron_kwargs,
+                connection_kwargs=dict(bias=True) if first else self.connection_kwargs,
+                recurrent_connection_kwargs=self.connection_kwargs,
             )
             first = False
-            initializer.initialize(new)
+            self.initializer.initialize(new)
             self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
@@ -190,15 +142,15 @@ class BaseRSNN(torch.nn.Module):
                 size=hidden_dim,
                 input_group=prev,
                 recurrent=False,
-                regs=regs,
-                w_regs=w_regs,
-                connection_class=Connection if first else connection_class,
-                neuron_class=neuron_type,
-                neuron_kwargs=neuron_kwargs,
-                connection_kwargs=dict(bias=True) if first else connection_kwargs,
+                regs=self.regularizers,
+                w_regs=self.w_regularizers,
+                connection_class=Connection if first else self.connection_type,
+                neuron_class=self.neuron_type,
+                neuron_kwargs=self.neuron_kwargs,
+                connection_kwargs=dict(bias=True) if first else self.connection_kwargs,
             )
             first = False
-            initializer.initialize(new)
+            self.initializer.initialize(new)
             self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
@@ -230,13 +182,13 @@ class BaseRSNN(torch.nn.Module):
             input_group=prev,
             recurrent=False,
             regs=[],
-            w_regs=w_regs,
-            connection_class=connection_class,
-            neuron_class=FastReadoutGroup,
-            neuron_kwargs=readout_kwargs,
-            connection_kwargs=connection_kwargs,
+            w_regs=self.w_regularizers,
+            connection_class=self.connection_type,
+            neuron_class=self.readout_type,
+            neuron_kwargs=self.readout_kwargs,
+            connection_kwargs=self.connection_kwargs,
         )
-        initializer.initialize(new)
+        self.initializer.initialize(new)
         self.model.add_monitor(
             PlotStateMonitor(
                 new.output_group,
@@ -282,11 +234,14 @@ class BaseRSNN(torch.nn.Module):
         self.model.configure(
             input_group,
             output_group,
-            time_step=dt,
+            time_step=self.dt,
         )
 
         self.optimizer = None
         self.state_initialized = False
+
+        self.numeric_monitors = ['PopulationSpikeCountMonitor', 'ActiveNeuronMonitor']
+        self.plot_monitors = ['PlotStateMonitor']
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
         self.optimizer = optimizer
