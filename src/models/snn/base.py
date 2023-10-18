@@ -291,7 +291,7 @@ class BaseRSNN(torch.nn.Module):
 
     def step(self, x: Tensor, record: bool = False) -> Tensor:
         """perform a single step of the model"""
-        return self.model(x, record=record)
+        return torch.tanh(self.model(x, record=record))
 
     def forward(self, *args: Tensor, record: bool = False, **kwargs) -> Tensor:
         """forward pass of the model on an input sequence"""

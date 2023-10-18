@@ -6,7 +6,7 @@ defaults:
   - logging: logging
   - _self_
 
-seed: 42
+seed: 777
 experiment: default
 device: cuda
 
@@ -24,7 +24,7 @@ task:
 
 run:
   load_dir: null
-  render_every: 10
+  render_every: 20
 
 learning:
-  total_steps: 400_000
+  total_steps: 1_000_000

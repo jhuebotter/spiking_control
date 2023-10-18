@@ -11,6 +11,7 @@ model:
     neuron:
       type: lif
       kwargs:
+        reset: sub
         tau_mem: ${model.time.tau_mem}
         tau_syn: ${model.time.tau_syn}
     readout:
@@ -18,12 +19,12 @@ model:
       kwargs:
         tau_mem: ${model.time.tau_mem}
         tau_syn: ${model.time.tau_syn}
-        n_readouts: 20
+        n_readouts: 25
     connection:
-      type: bottleneck
+      type: linear
       kwargs:
         bias: true
-        n_dims: 20
+        # n_dims: 20
     initializer:
       type: normal
       kwargs:
@@ -40,20 +41,20 @@ model:
       activity:
         - type: LowerBoundL2
           kwargs:
-            strength: 0.01
-            threshold: 0.1
+            strength: 0.0
+            threshold: 0.0
             basis: mem
             dims: null
         - type: UpperBoundL2
           kwargs:
             strength: 1.0
             threshold: 0.3
-            basis: mem
+            basis: out
             dims: 1
       weights:
       - type: L2
         kwargs:
-          strength: 0.005
+          strength: 0.001
 
 optimizer:
   type: smorms3
@@ -61,7 +62,7 @@ optimizer:
     lr: 0.0005
 
 learning:
-  batches_per_iteration: 10
+  batches_per_iteration: 25
   params:
     batch_size: 256
     max_norm: 30

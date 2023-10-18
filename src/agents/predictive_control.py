@@ -1,6 +1,6 @@
 from . import BaseAgent
-from ..memory import EpisodeMemory, Transition, Episode
-from ..models import (
+from src.memory import EpisodeMemory, Transition, Episode
+from src.models import (
     make_transition_model,
     make_policy_model
 )
@@ -17,6 +17,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 from typing import Optional
 from pathlib import Path
+from src.plotting import render_video
 
 
 class PredictiveControlAgent(BaseAgent):
@@ -108,7 +109,7 @@ class PredictiveControlAgent(BaseAgent):
         while self.steps < total_steps:
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()
-            render = (self.iterations % self.run_config.get("render_every", 1)) == 0
+            render = ((self.iterations + 1) % self.run_config.get("render_every", 1)) == 0
             self.test(steps=self.steps_per_evaluation, render=render)
             self.save_models()
             self.iterations += 1
@@ -180,7 +181,7 @@ class PredictiveControlAgent(BaseAgent):
         self.steps += step
         average_reward = total_reward / len(episodes)
         results = {
-            "average reward": average_reward,
+            "train average reward": average_reward,
         }
 
 
@@ -334,15 +335,16 @@ class PredictiveControlAgent(BaseAgent):
         # log the results
         average_reward = total_reward / len(completed_episodes)
         results = {
-            "average reward": average_reward,
+            "test average reward": average_reward,
         }
 
         # make the video
         if render:
-            #make_video(completed_framestacks, self.dir, f"test_{self.epochs}.mp4")
+            episode_videos = {"test episodes" : render_video(completed_framestacks)}
             plots = self.policy_model.get_monitor_data(exclude=self.policy_model.numeric_monitors)
+            results.update(episode_videos)
             results.update(plots)
-
+                
         self.log(results, step=self.epochs)
 
     def save_models(self):

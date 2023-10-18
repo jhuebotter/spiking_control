@@ -1,6 +1,7 @@
 import wandb
 from .extratypes import *
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import numpy as np
 import torch
 from rich.pretty import pprint
@@ -80,6 +81,30 @@ class BaseLogger:
 
         return (isinstance(val, plt.Figure) or \
                 isinstance(val, np.ndarray) and len(val.shape) == 3)
+    
+    def is_video(self, val) -> bool:
+        """detect if the value is a matplotlib animation or a video
+        Args:
+            val (any): value
+        
+        Returns:
+            bool: True if the value is a matplotlib animation or a video, else False
+        """
+
+        return (isinstance(val, animation.FuncAnimation) or \
+                isinstance(val, np.ndarray) and len(val.shape) == 4)
+    
+    def is_media(self, val) -> bool:
+        """detect if the value is a matplotlib figure, animation, or an image
+        Args:
+            val (any): value
+        
+        Returns:
+            bool: True if the value is a matplotlib figure, animation, or an image, else False
+        """
+
+        return (self.is_figure(val) or \
+                self.is_video(val))
 
 
 class WandBLogger(BaseLogger):
@@ -123,9 +148,17 @@ class WandBLogger(BaseLogger):
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)                    
+            # detect if the value is an image or video
+            elif self.is_media(val):
+                # handled by media logger
+                pass
             # detect if the value is an image 
-            elif self.is_figure(val):
-                self.log_data(key, wandb.Image(val))
+            #elif self.is_figure(val):
+            #    self.log_data(key, wandb.Image(val))
+            # detect if the value is a video
+            #elif self.is_video(val):
+            #    self.log_data(key, wandb.Video(val))
+            # else throw an error
             # else throw an error
             else:
                 raise ValueError(f"Cannot log data of type {type(data)}")
@@ -159,9 +192,16 @@ class WandBLogger(BaseLogger):
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)
+            # detect if the value is an image or video
+            elif self.is_media(val):
+                # handled by media logger
+                pass
             # detect if the value is an image 
-            elif self.is_figure(val):
-                self.log_data(key, wandb.Image(val))
+            #elif self.is_figure(val):
+            #    self.log_data(key, wandb.Image(val))
+            # detect if the value is a video
+            #elif self.is_video(val):
+            #    self.log_data(key, wandb.Video(val))
             # else throw an error
             else:
                 raise ValueError(f"Cannot log data of type {type(data)}")
@@ -284,7 +324,7 @@ class PandasLogger(BaseLogger):
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)                    
             # detect if the value is an image 
-            elif self.is_figure(val):
+            elif self.is_media(val):
                 # no need to log images
                 pass
             # else throw an error
@@ -321,7 +361,7 @@ class PandasLogger(BaseLogger):
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)
             # detect if the value is an image 
-            elif self.is_figure(val):
+            elif self.is_media(val):
                 # no need to log images
                 pass
             # else throw an error
@@ -387,11 +427,17 @@ class MediaLogger(BaseLogger):
     def __init__(
             self,
             dir: str,
+            image_format: str = "png",
+            video_format: str = "mp4",
+            run: Optional[wandb.run] = None,
         ) -> None:
         
         super().__init__()
         self.dir = Path(dir, "media")
         self.dir.mkdir(parents=True, exist_ok=True)
+        self.image_format = image_format
+        self.video_format = video_format
+        self.run = run
         print("media will be saved at", self.dir)
 
         # TODO: extend to save videos
@@ -410,22 +456,36 @@ class MediaLogger(BaseLogger):
         """
 
         assert isinstance(key, str), "key must be a string"
-        assert self.is_figure(value), \
+        assert self.is_media(value), \
             "value must be matplotlib figure or numpy array in image shape"
 
-        path = Path(self.dir, f"{key} {self.get_step()}.png")
+        if self.is_figure(value):
 
-        if isinstance(value, plt.Figure):
-            self.save_to_file(value, path)
-            
-        elif isinstance(value, np.ndarray):
-            # convert np array to plt figure
-            fig = plt.figure()
-            plt.imshow(value)
-            plt.axis('off')
-            plt.tight_layout()
-            self.save_to_file(fig, path)
-            plt.close(fig)           
+            if isinstance(value, plt.Figure):
+                path = Path(self.dir, f"{key} {self.get_step()}.{self.image_format}")
+                self.save_fig_to_file(value, path)
+                
+            elif isinstance(value, np.ndarray):
+                # convert np array to plt figure
+                path = Path(self.dir, f"{key} {self.get_step()}.{self.image_format}")
+                fig = plt.figure()
+                plt.imshow(value)
+                plt.axis('off')
+                plt.tight_layout()
+                self.save_fig_to_file(fig, path)
+                plt.close(fig)
+
+            if self.run is not None:
+                self.run.log({key: wandb.Image(str(path))}, step=self.get_step())
+
+        elif self.is_video(value):
+
+            if isinstance(value, animation.FuncAnimation):
+                path = Path(self.dir, f"{key} {self.get_step()}.{self.video_format}")
+                self.save_animation_to_file(value, path)
+
+            if self.run is not None:
+                self.run.log({key: wandb.Video(str(path))}, step=self.get_step())
 
     def log(self, data: dict, prefix: Optional[str] = None, step: Optional[int] = None) -> None:
         """ log a dictionary to pandas dataframe
@@ -461,7 +521,7 @@ class MediaLogger(BaseLogger):
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)                    
             # detect if the value is an image 
-            elif self.is_figure(val):
+            elif self.is_media(val):
                 self.log_data(key, val)
             # else throw an error
             else:
@@ -497,16 +557,17 @@ class MediaLogger(BaseLogger):
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)
             # detect if the value is an image 
-            elif self.is_figure(val):
+            elif self.is_media(val):
                 self.log_data(key, val)
             # else throw an error
             else:
                 raise ValueError(f"Cannot log data of type {type(data)}")
 
-    def save_to_file(self, image: plt.Figure, path: Union[str, Path]) -> None:
+    def save_fig_to_file(self, image: plt.Figure, path: Union[str, Path]) -> None:
         """save the dataframe to a file
         Args:
-            path (str, optional): path. Defaults to None.
+            image (plt.Figure): image
+            path (str, Path): path. Defaults to None.
 
         Returns:
             None
@@ -520,3 +581,33 @@ class MediaLogger(BaseLogger):
             print("updating existing image!")
 
         image.savefig(path)
+
+    def save_animation_to_file(self, animation: animation, path: Union[str, Path]) -> None:
+        """save the dataframe to a file
+        Args:
+            animation (animation): animation
+            path (str, Path): path. Defaults to None.
+
+        Returns:
+            None
+        """
+
+        path = Path(path)
+
+        # try to load the file
+        print("saving animation at", path)
+        if path.exists():
+            print("updating existing animation!")
+
+        if self.video_format == "mp4":
+            animation.save(path)
+
+        elif self.video_format == "gif":
+            animation.save(path, writer='imagemagick', fps=30)
+
+        elif self.video_format == "webm":
+            animation.save(path, writer='ffmpeg', fps=30)
+
+        elif self.video_format == "html":
+            with open(path, "w") as f:
+                print(animation.to_html5_video(), file=f)

@@ -54,7 +54,7 @@ class ReacherEnv(gym.Env):
 
         self.render_mode = render_mode
         self.show_target_arm = show_target_arm
-        self.screen_px = 256
+        self.screen_px = 128
 
         self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
         self.observation_noise_std = np.ones(8) * 0.01

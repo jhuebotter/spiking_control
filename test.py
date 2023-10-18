@@ -1,39 +1,15 @@
-import os
 from pathlib import Path
-import torch
-import celluloid
 import wandb
 import hydra
 from omegaconf import DictConfig, OmegaConf
-import gymnasium as gym
-import pygame
-import tqdm
-from rich.console import Console
 from rich import pretty, print
-
-from src.models import (
-    PolicyNetRSNN,
-    TransitionNetRSNN,
-    PolicyNetPRNN,
-    TransitionNetPRNN,
-)
-from src.envs import (
-    ReacherEnv, 
-    ReacherEnvSimple, 
-    TwoDPlaneEnv, 
-    TwoDPlaneEnvSimple,
-    make_env,
-)
-
+from src.envs import make_env
 from src.utils import (
     get_device,
     conf_to_dict,
     set_seed,
 )
-
 from src.agents import PredictiveControlAgent
-from src.memory import EpisodeMemory
-
 from src.loggers import (
     WandBLogger,
     ConsoleLogger,
@@ -74,11 +50,6 @@ def main(cfg : DictConfig) -> None:
         print('pandas logger is used!')
         loggers.append(PandasLogger(out_dir))
 
-    # make a media logger
-    if cfg.logging.media.use:
-        print('media logger is used!')
-        loggers.append(MediaLogger(out_dir))
-
     # initialize wandb
     if cfg.logging.wandb.use:
         print('wandb logger is used!')
@@ -93,7 +64,13 @@ def main(cfg : DictConfig) -> None:
         Path(wandb.run.dir, "hydra-config.yaml").symlink_to(config_path)
         loggers.append(WandBLogger(run))
     else:
+        run = None
         print('wandb logger is not used!')
+
+    # make a media logger
+    if cfg.logging.media.use:
+        print('media logger is used!')
+        loggers.append(MediaLogger(out_dir, run=run))
     
     # set the device
     device = get_device(cfg.device)
@@ -114,9 +91,6 @@ def main(cfg : DictConfig) -> None:
         dir=out_dir,
         eval_env=eval_env,
     )
-
-    print(agent.transition_model.name)
-    print(agent.policy_model.name)
 
     # load the models
     load_dir = cfg.run.load_dir
