@@ -56,14 +56,11 @@ model:
         kwargs:
           strength: 0.001
 
-optimizer:
-  type: smorms3
-  params:
-    lr: 0.0005
+optimizer: ${optimizer}
 
 learning:
-  batches_per_iteration: 1
+  batches_per_iteration: 25
   params:
-    batch_size: 256
+    batch_size: 1024
     max_norm: 30
     warmup_steps: 5

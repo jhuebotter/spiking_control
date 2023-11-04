@@ -5,10 +5,7 @@ model:
     activation: 
       type: lrelu
 
-optimizer:
-  type: smorms3
-  params:
-    lr: 0.0005
+optimizer: ${optimizer}
 
 learning:
   batches_per_iteration: 10
