@@ -1,5 +1,7 @@
-defaults:
-  - wandb: wandb
+wandb:
+  use: true
+  entity: jhuebotter
+  project: spiking_control
 
 console:
   use: true
