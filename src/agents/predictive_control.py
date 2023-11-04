@@ -6,10 +6,10 @@ from src.models import (
 )
 from ..utils import (
     make_optimizer,
-    # conf_to_dict,
     dict_mean,
     FrameStack
 )
+from src.eval_helpers import baseline_prediction
 
 import gymnasium as gym
 import torch
@@ -17,7 +17,10 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 from typing import Optional
 from pathlib import Path
-from src.plotting import render_video
+from src.plotting import (
+    render_video,
+    animate_predictions
+)
 
 
 class PredictiveControlAgent(BaseAgent):
@@ -45,6 +48,7 @@ class PredictiveControlAgent(BaseAgent):
         self.transition_config = config.transition
         self.policy_config = config.policy
         self.run_config = config.run
+        self.plotting_config = config.plotting
 
         # training parameters
         self.reset_memory = config.agent.reset_memory
@@ -116,6 +120,7 @@ class PredictiveControlAgent(BaseAgent):
 
         self.finish_run()
 
+
     def collect_rollouts(self, steps: int, reset_memory: bool = True):
         
         self.policy_model.eval()
@@ -184,6 +189,7 @@ class PredictiveControlAgent(BaseAgent):
             "train average reward": average_reward,
         }
 
+        self.log(results, step=self.epochs)
 
 
     def train_transition_model(self):
@@ -338,11 +344,29 @@ class PredictiveControlAgent(BaseAgent):
             "test average reward": average_reward,
         }
 
+        prediction_results = baseline_prediction(
+            transition_model=self.transition_model,
+            episodes=completed_episodes,
+            warmup=self.transition_config.learning.params.get('warmup_steps', 0),
+            unroll=self.run_config.get("prediction_unroll", 1),
+        )
+        results.update(prediction_results)
+
         # make the video
         if render:
             episode_videos = {"test episodes" : render_video(completed_framestacks)}
+            prediction_videos = {"test prediction animations": animate_predictions(
+                completed_episodes,
+                self.transition_model,
+                labels = env.get_attr('state_labels')[0],
+                warmup=self.transition_config.learning.params.get('warmup_steps', 0),
+                unroll=self.plotting_config.get("prediction_animation_unroll", 1),
+                step=self.plotting_config.get("prediction_animation_step", 2),
+            )}
             plots = self.policy_model.get_monitor_data(exclude=self.policy_model.numeric_monitors)
             results.update(episode_videos)
+            results.update(prediction_videos)
+            
             results.update(plots)
                 
         self.log(results, step=self.epochs)

@@ -24,6 +24,7 @@ class ReacherEnv(gym.Env):
         show_target_arm: bool = False,
         dt: float = 0.02,
         eval: bool = False,
+        full_target_obs: bool = False,
         **kwargs
     ):
         self.metadata = {
@@ -37,6 +38,13 @@ class ReacherEnv(gym.Env):
         self.max_action = 1.0
         self.force_mag = 8.0
         self.damp = 5.0
+
+        #####
+
+        self.full_target_obs = full_target_obs
+        self.target_dim = 8 if self.full_target_obs else 2
+
+        #####
 
         self.eval = eval
 
@@ -54,7 +62,7 @@ class ReacherEnv(gym.Env):
 
         self.render_mode = render_mode
         self.show_target_arm = show_target_arm
-        self.screen_px = 128
+        self.screen_px = 256
 
         self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
         self.observation_noise_std = np.ones(8) * 0.01
@@ -71,7 +79,8 @@ class ReacherEnv(gym.Env):
                         low=np.array([-1.0] * 8), high=np.array([1.0] * 8)
                     ),
                     "target": spaces.Box(
-                        low=np.array([-1.0] * 2), high=np.array([1.0] * 2)
+                        low=np.array([-1.0] * self.target_dim), 
+                        high=np.array([1.0] * self.target_dim)
                     ),
                 }
             )
@@ -101,7 +110,7 @@ class ReacherEnv(gym.Env):
 
         self.loss_gain = {
             'gain': np.array([1.0, 1.0]),
-            'use': np.array([True, True, False, False, False, False, False, False])
+            'use': np.array([0, 1])
         }
 
         self.set_seed(seed)
@@ -191,7 +200,7 @@ class ReacherEnv(gym.Env):
             proprio_observation = self.make_observation(self.state)
             observation = {
                 "proprio": proprio_observation,
-                "target": target_observation[:2],
+                "target": target_observation[:self.target_dim],
             }
         else:
             observation = self.render(mode="rgb_array")
@@ -286,7 +295,7 @@ class ReacherEnv(gym.Env):
         # make observation
         proprio_observation = self.make_observation(self.state)
         target_observation = self.make_observation(self.target, noise=False)
-        observation = {"proprio": proprio_observation, "target": target_observation[:2]}
+        observation = {"proprio": proprio_observation, "target": target_observation[:self.target_dim]}
 
         # additional info
         on_target = False

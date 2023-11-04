@@ -113,7 +113,7 @@ class TwoDPlaneEnv(gym.Env):
 
         self.loss_gain = {
             'gain': np.array([1.0, 1.0]),
-            'use': np.array([True, True, False, False])
+            'use': np.array([0, 1])
         }
 
         self.set_seed(seed)

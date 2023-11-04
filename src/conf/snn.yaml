@@ -62,7 +62,7 @@ optimizer:
     lr: 0.0005
 
 learning:
-  batches_per_iteration: 25
+  batches_per_iteration: 1
   params:
     batch_size: 256
     max_norm: 30

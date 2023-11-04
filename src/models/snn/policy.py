@@ -76,12 +76,13 @@ class PolicyNetRSNN(BaseRSNN):
             **kwargs,
         )
 
-    def criterion(self, y_hat: Tensor, y: Tensor, loss_gain: Optional[dict] = None) -> Tensor:
+    def criterion(self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None) -> Tensor:
         if loss_gain is None:
-            return torch.nn.functional.mse_loss(y_hat, y)
-        use = torch.tensor(loss_gain['use'], device=self.device, dtype=torch.bool)
+            return torch.nn.functional.mse_loss(target, y_hat)
+        use = torch.tensor(loss_gain['use'], device=self.device)
         gain = torch.tensor(loss_gain['gain'], device=self.device)
-        return torch.mean(torch.pow(y_hat[:, use] - y, 2) * gain)
+        
+        return torch.mean(torch.pow(target[:, use] - y_hat[:, use], 2) * gain)
 
     def train_fn(
             self,
@@ -136,7 +137,7 @@ class PolicyNetRSNN(BaseRSNN):
             action_hat = self(new_state_hat, target, record=record)
             new_state_delta_hat = transition_model(new_state_hat, action_hat, deterministic=deterministic_transition)
             new_state_hat = new_state_hat + new_state_delta_hat
-            policy_loss += self.criterion(new_state_hat.squeeze(0), target, loss_gain=loss_gain)
+            policy_loss += self.criterion(target, new_state_hat.squeeze(0), loss_gain=loss_gain)
 
         # compute the loss
         policy_loss = policy_loss / unroll_steps 
