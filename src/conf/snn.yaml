@@ -54,7 +54,7 @@ model:
       weights:
       - type: L2
         kwargs:
-          strength: ${regularization.weight.l2}
+          strength: ${weightL2}
 
 optimizer: ${optimizer}
 
