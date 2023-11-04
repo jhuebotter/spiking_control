@@ -47,14 +47,14 @@ model:
             dims: null
         - type: UpperBoundL2
           kwargs:
-            strength: 1.0
+            strength: 0.0
             threshold: 0.3
             basis: out
             dims: 1
       weights:
       - type: L2
         kwargs:
-          strength: 0.001
+          strength: ${regularization.weights.l2}
 
 optimizer: ${optimizer}
 

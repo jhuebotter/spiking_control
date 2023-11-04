@@ -21,6 +21,10 @@ optimizer:
   params:
     lr: 0.0005
 
+regularization:
+  weight:
+    l2: 0.001
+
 task:
   num_envs: 25
   num_eval_envs: 8
