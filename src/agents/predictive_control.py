@@ -110,6 +110,7 @@ class PredictiveControlAgent(BaseAgent):
 
     def run(self, total_steps: int):
 
+        self.test(steps=self.steps_per_evaluation, render=True)
         while self.steps < total_steps:
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()

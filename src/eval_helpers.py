@@ -93,10 +93,10 @@ def make_predictions(
 
     # get the states, actions, and next states
     states = torch.stack(
-        [torch.stack([step.state for step in episode]) for episode in episodes], dim=1
+        [torch.stack([s.state for s in episode]) for episode in episodes], dim=1
     ).to(device)
     actions = torch.stack(
-        [torch.stack([step.action for step in episode]) for episode in episodes], dim=1
+        [torch.stack([s.action for s in episode]) for episode in episodes], dim=1
     ).to(device)
 
     T = states.shape[0]

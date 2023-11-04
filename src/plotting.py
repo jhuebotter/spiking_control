@@ -95,7 +95,7 @@ def animate_predictions(
     animations = []
 
     for i in range(min(N, max_animations)):
-        animation = animate_prediction(predictions[:, :, i], next_states[:, :, i], labels, warmup, step, fps, dpi, font_size, save)
+        animation = animate_prediction(predictions[:, :, i], next_states[:, i], labels, warmup, step, fps, dpi, font_size, save)
         animations.append(animation)
 
     return animations
@@ -115,7 +115,7 @@ def animate_prediction(
     """animate predictions and save to disk
     Args:
         predictions: array of shape [T, unroll, dim]
-        next_states: array of shape [T, unroll, dim]
+        next_states: array of shape [T, dim]
         labels: list of labels for each dimension
         warmup: number of steps to warmup the model
         fps: frames per second
