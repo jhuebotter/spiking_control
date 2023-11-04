@@ -290,6 +290,8 @@ class PredictiveControlAgent(BaseAgent):
         with torch.no_grad(): 
             self.policy_model.eval()       
             self.policy_model.reset_state()
+            self.transition_model.eval()
+            self.transition_model.reset_state()
 
             step = 0
             total_reward = 0
@@ -302,6 +304,9 @@ class PredictiveControlAgent(BaseAgent):
                     # predict the action
                     actions = self.policy_model.predict(obs, targets, record=True)
                     actions = actions.squeeze(0).clamp(action_min, action_max).detach()
+
+                    # predict the next states
+                    _ = self.transition_model.predict(obs, actions, deterministic=True, record=True)
 
                     # step the environment
                     observations, rewards, terminates, truncateds, infos = env.step(actions.cpu().numpy())
@@ -344,16 +349,10 @@ class PredictiveControlAgent(BaseAgent):
             "test average reward": average_reward,
         }
 
-        prediction_results = baseline_prediction(
-            transition_model=self.transition_model,
-            episodes=completed_episodes,
-            warmup=self.transition_config.learning.params.get('warmup_steps', 0),
-            unroll=self.run_config.get("prediction_unroll", 1),
-        )
-        results.update(prediction_results)
-
         # make the video
         if render:
+            policy_plots = self.policy_model.get_monitor_data(exclude=self.policy_model.numeric_monitors)
+            transition_plots = self.transition_model.get_monitor_data(exclude=self.transition_model.numeric_monitors)
             episode_videos = {"test episodes" : render_video(completed_framestacks)}
             prediction_videos = {"test prediction animations": animate_predictions(
                 completed_episodes,
@@ -363,12 +362,19 @@ class PredictiveControlAgent(BaseAgent):
                 unroll=self.plotting_config.get("prediction_animation_unroll", 1),
                 step=self.plotting_config.get("prediction_animation_step", 2),
             )}
-            plots = self.policy_model.get_monitor_data(exclude=self.policy_model.numeric_monitors)
             results.update(episode_videos)
             results.update(prediction_videos)
+            results.update(policy_plots)
+            results.update(transition_plots)
+
+        prediction_results = baseline_prediction(
+            transition_model=self.transition_model,
+            episodes=completed_episodes,
+            warmup=self.transition_config.learning.params.get('warmup_steps', 0),
+            unroll=self.run_config.get("prediction_unroll", 1),
+        )
+        results.update(prediction_results)
             
-            results.update(plots)
-                
         self.log(results, step=self.epochs)
 
     def save_models(self):

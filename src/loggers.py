@@ -165,6 +165,8 @@ class WandBLogger(BaseLogger):
             elif self.is_media(val):
                 # handled by media logger
                 pass
+            elif val is None:
+                pass
             # detect if the value is an image
             # elif self.is_figure(val):
             #    self.log_data(key, wandb.Image(val))
@@ -174,7 +176,7 @@ class WandBLogger(BaseLogger):
             # else throw an error
             # else throw an error
             else:
-                raise ValueError(f"Cannot log data of type {type(data)}")
+                raise ValueError(f"Cannot log data of type {type(val)}")
 
     def log_iterable(self, data: Iterable, prefix: Optional[str] = None) -> None:
         """log an iterable to wandb
@@ -209,6 +211,8 @@ class WandBLogger(BaseLogger):
             elif self.is_media(val):
                 # handled by media logger
                 pass
+            elif val is None:
+                pass
             # detect if the value is an image
             # elif self.is_figure(val):
             #    self.log_data(key, wandb.Image(val))
@@ -217,7 +221,7 @@ class WandBLogger(BaseLogger):
             #    self.log_data(key, wandb.Video(val))
             # else throw an error
             else:
-                raise ValueError(f"Cannot log data of type {type(data)}")
+                raise ValueError(f"Cannot log data of type {type(val)}")
 
     def log_data(self, key: str, value) -> None:
         """log data to wandb
