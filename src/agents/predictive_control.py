@@ -113,7 +113,7 @@ class PredictiveControlAgent(BaseAgent):
         while self.steps < total_steps:
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()
-            render = ((self.iterations + 1) % self.run_config.get("render_every", 1)) == 0
+            render = ((self.iterations + 1) % self.plotting_config.get("render_every", 1)) == 0
             self.test(steps=self.steps_per_evaluation, render=render)
             self.save_models()
             self.iterations += 1
