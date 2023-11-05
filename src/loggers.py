@@ -647,10 +647,10 @@ class MediaLogger(BaseLogger):
             animation.save(path)
 
         elif self.video_format == "gif":
-            animation.save(path, writer="imagemagick", fps=30)
+            animation.save(path, writer="imagemagick")
 
         elif self.video_format == "webm":
-            animation.save(path, writer="ffmpeg", fps=30)
+            animation.save(path, writer="ffmpeg")
 
         elif self.video_format == "html":
             with open(path, "w") as f:

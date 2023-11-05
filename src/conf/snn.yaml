@@ -35,7 +35,7 @@ model:
         scaling: 1.0
     activation:
       type: ${model.activation.type}
-      activation_kwargs:
+      kwargs:
         beta: ${model.activation.beta}
     regularization:
       activity:
