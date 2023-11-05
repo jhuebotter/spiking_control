@@ -34,9 +34,9 @@ model:
         bias_scale: 1.0
         scaling: 1.0
     activation:
-      type: sigmoidspike
+      type: ${model.activation.type}
       activation_kwargs:
-        beta: 25
+        beta: ${model.activation.beta}
     regularization:
       activity:
         - type: LowerBoundL2
