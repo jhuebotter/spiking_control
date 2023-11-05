@@ -41,20 +41,20 @@ model:
       activity:
         - type: LowerBoundL2
           kwargs:
-            strength: 0.0
-            threshold: 0.0
-            basis: mem
+            strength: ${LowerBoundL2.strength}
+            threshold: ${LowerBoundL2.threshold}
+            basis: ${LowerBoundL2.basis}
             dims: null
         - type: UpperBoundL2
           kwargs:
-            strength: 0.0
-            threshold: 0.3
-            basis: out
+            strength: ${UpperBoundL2.strength}
+            threshold: ${UpperBoundL2.threshold}
+            basis: ${UpperBoundL2.basis}
             dims: 1
       weights:
       - type: L2
         kwargs:
-          strength: ${weightL2}
+          strength: 0.001
 
 optimizer: ${optimizer}
 

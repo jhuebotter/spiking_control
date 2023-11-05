@@ -21,7 +21,14 @@ optimizer:
   params:
     lr: 0.0005
 
-weightL2: 0.001
+LowerBoundL2:
+  strength: 0.0001
+  threshold: 0.0
+  basis: out
+UpperBoundL2:
+  strength: 0.0001
+  threshold: 0.3
+  basis: out
 
 task:
   num_envs: 25
