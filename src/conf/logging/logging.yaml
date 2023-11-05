@@ -1,5 +1,5 @@
 wandb:
-  use: false
+  use: true
   entity: jhuebotter
   project: spiking_control
 
