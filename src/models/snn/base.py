@@ -16,21 +16,18 @@ from control_stork.initializers import (
     AverageInitializer,
 )
 from control_stork.monitors import (
-    PlotStateMonitor, 
+    PlotStateMonitor,
     PopulationSpikeCountMonitor,
     ActiveNeuronMonitor,
 )
-from control_stork.plotting import (
-    plot_spikes,
-    plot_traces
-)
+from control_stork.plotting import plot_spikes, plot_traces
 from control_stork.activations import SigmoidSpike
 from control_stork.layers import Layer
 from src.extratypes import *
 
 
 class BaseRSNN(torch.nn.Module):
-    """Base class for spiking models with a hidden state. """
+    """Base class for spiking models with a hidden state."""
 
     def __init__(
         self,
@@ -51,10 +48,12 @@ class BaseRSNN(torch.nn.Module):
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
-        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(nu=200, sigma_u=1.0, time_step=1e-3),
+        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(
+            nu=200, sigma_u=1.0, time_step=1e-3
+        ),
         regularizers: list = [],
         w_regularizers: list = [],
-        device: torch.device = torch.device('cpu'),
+        device: torch.device = torch.device("cpu"),
         name: str = "RSNN",
         # **kwargs,
     ) -> None:
@@ -85,14 +84,17 @@ class BaseRSNN(torch.nn.Module):
         self.device = device
         self.name = name
 
-        self.input_kwargs['store_sequences'] = ['out']
-        self.neuron_kwargs['store_sequences'] = ['out', 'mem']
-        self.readout_kwargs['store_sequences'] = ['out', 'mem']
+        self.input_kwargs["store_sequences"] = ["out"]
+        self.neuron_kwargs["store_sequences"] = ["out", "mem"]
+        self.neuron_kwargs["activation"] = self.activation
+        self.readout_kwargs["store_sequences"] = ["out", "mem"]
 
         # make the model
         self.model = RecurrentSpikingModel(device=device)
         input_group = prev = self.model.add_group(
-            self.input_type(self.input_dim, name=f"{self.name} Input Group", **self.input_kwargs)
+            self.input_type(
+                self.input_dim, name=f"{self.name} Input Group", **self.input_kwargs
+            )
         )
         first = True
         for i in range(num_rec_layers):
@@ -213,13 +215,18 @@ class BaseRSNN(torch.nn.Module):
         elif self.out_style == "last":
             output_group = new = self.model.add_group(
                 DirectReadoutGroup(
-                    self.output_dim, weight_scale=1.0, name=f"{self.name} Direct Readout Group"
+                    self.output_dim,
+                    weight_scale=1.0,
+                    name=f"{self.name} Direct Readout Group",
                 )
             )
 
         self.model.add_monitor(
             PlotStateMonitor(
-                output_group, "out", plot_fn=plot_traces, title=f"{self.name} Average Readout Layer"
+                output_group,
+                "out",
+                plot_fn=plot_traces,
+                title=f"{self.name} Average Readout Layer",
             )
         )
 
@@ -240,8 +247,8 @@ class BaseRSNN(torch.nn.Module):
         self.optimizer = None
         self.state_initialized = False
 
-        self.numeric_monitors = ['PopulationSpikeCountMonitor', 'ActiveNeuronMonitor']
-        self.plot_monitors = ['PlotStateMonitor']
+        self.numeric_monitors = ["PopulationSpikeCountMonitor", "ActiveNeuronMonitor"]
+        self.plot_monitors = ["PlotStateMonitor"]
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
         self.optimizer = optimizer
@@ -280,7 +287,7 @@ class BaseRSNN(torch.nn.Module):
 
     def count_parameters(self):
         return self.model.count_parameters()
-    
+
     def prepare_input(self, x: Tensor) -> None:
         """prepare input shapes for forward pass"""
         # add a temporal dimension if necessary
@@ -301,30 +308,29 @@ class BaseRSNN(torch.nn.Module):
 
         if not self.state_initialized:
             self.init_state(N)
-        
+
         x_outs = torch.empty((T, N, self.output_dim), device=self.device)
         for t in range(T):
             for _ in range(self.repeat_input):
-                x_out = self.step(x[:, t:t+1], record=record)
+                x_out = self.step(x[:, t : t + 1], record=record)
             x_outs[t] = x_out[:, -1]
 
         return x_outs
 
     def predict(
-            self,
-            *args: Tensor,
-            deterministic: bool = True,
-            record: bool = False,
+        self,
+        *args: Tensor,
+        deterministic: bool = True,
+        record: bool = False,
     ) -> Tensor:
-        
         return self(*args, record=record)
-    
+
     def train_fn(*args, **kwargs):
-        """ To be implemented by child class."""
+        """To be implemented by child class."""
         raise NotImplementedError
-    
+
     def criterion(self, *args, **kwargs) -> Tensor:
         raise NotImplementedError
-    
+
     def __str__(self) -> str:
         return str(self.model)
