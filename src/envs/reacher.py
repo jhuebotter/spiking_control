@@ -261,7 +261,7 @@ class ReacherEnv(gym.Env):
         # if in eval mode, make a deterministic environment
         if self.eval:
             if self.seed is None:
-                self.set_seed(0)
+                self.set_seed(1)
             v = self.seed % 8
             state = np.zeros(4)
             target = np.zeros(4)

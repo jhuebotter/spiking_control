@@ -18,6 +18,9 @@ model:
   activation:
     type: sigmoidspike
     beta: 25
+  connection:
+    n_dims: 10
+  hidden_dim: 1024
 
 optimizer:
   type: smorms3

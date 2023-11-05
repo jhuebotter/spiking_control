@@ -157,10 +157,10 @@ def make_snn_objects(config: DictConfig) -> dict:
         params.pop('activation')
 
     # get the connection type
-    params['connection_type'] = get_connection_class(config.params.connection.get('type', 'default'))
-    if params['connection_type'] is None:
-        params.pop('connection_type')
+    params['connection_type'] = get_connection_class(config.params.connection.get('n_dims', None))
     params['connection_kwargs'] = config.params.connection.get('kwargs', {})
+    if params['connection_kwargs'].get('n_dims', None) is None:
+        del params['connection_kwargs'].n_dims
 
     # make the initializer
     params['initializer'] = make_initilizer(
@@ -235,24 +235,21 @@ def get_layer_class(type: str = 'default') -> torch.nn.Module:
         raise NotImplementedError(f"the layer {type} is not implemented")
 
 
-def get_connection_class(type: str = 'default') -> Connection:
+def get_connection_class(n_dims: Optional[int] = None) -> Connection:
     """ get the connection class
     Args:
-        type (str, optional): connection type. Defaults to 'default'.
-
+        n_dims (Optional[int], optional): number of dimensions. Defaults to None.
     Returns:
         Connection: connection class    
     """
-    type = type.lower()
-    if type == 'default':
-        return None
-    elif type == 'linear':
-        return Connection
-    elif type == 'bottleneck':
-        return BottleneckLinearConnection
-    else:
-        raise NotImplementedError(f"the connection {type} is not implemented")
 
+    assert n_dims is None or n_dims > 0, f"n_dims must be positive, but got {n_dims}"
+
+    if n_dims == None:
+        return Connection
+    else:
+        return BottleneckLinearConnection
+    
 
 def make_initilizer(
         type: str = 'default',

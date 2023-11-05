@@ -1,7 +1,7 @@
 model:
   type: rsnn
   params:
-    hidden_dim: 1024
+    hidden_dim: ${model.hidden_dim}
     dt: ${model.time.dt}
     repeat_input: 8
     out_style: last
@@ -21,10 +21,10 @@ model:
         tau_syn: ${model.time.tau_syn}
         n_readouts: 25
     connection:
-      type: linear
+      n_dims: ${model.connection.n_dims}
       kwargs:
         bias: true
-        # n_dims: 20
+        n_dims: ${model.connection.n_dims}
     initializer:
       type: normal
       kwargs:
