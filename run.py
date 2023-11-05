@@ -79,7 +79,7 @@ def main(cfg : DictConfig) -> None:
 
     # make the environment
     env = make_env(cfg.task, cfg.seed)
-    eval_env = make_env(cfg.task, eval=True, seed=0)
+    eval_env = make_env(cfg.task, eval=True, seed=1)
 
     # make the models
     agent = PredictiveControlAgent(
