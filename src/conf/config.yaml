@@ -19,7 +19,7 @@ model:
     type: sigmoidspike
     beta: 25
   connection:
-    n_dims: 0
+    n_dims: null
   hidden_dim: 1024
 
 optimizer:

@@ -243,9 +243,11 @@ def get_connection_class(n_dims: Optional[int] = None) -> Connection:
         Connection: connection class    
     """
 
-    if n_dims == 0 or n_dims is None:
+    if n_dims in [0, None]:
+        print("using a normal connection")
         return Connection
     else:
+        print(f"using a bottleneck connection with {n_dims} dimensions")
         return BottleneckLinearConnection
     
 
