@@ -8,6 +8,7 @@ from src.utils import (
     get_device,
     conf_to_dict,
     set_seed,
+    id_generator,
 )
 from src.agents import PredictiveControlAgent
 from src.loggers import (
@@ -60,10 +61,12 @@ def main(cfg : DictConfig) -> None:
             dir=out_dir,
             )
         # create a symlink to the config file
+        run_id = run.id
         Path(wandb.run.dir, "hydra-config.yaml").symlink_to(config_path)
         loggers.append(WandBLogger(run))
     else:
         run = None
+        run_id = id_generator()
         print('wandb logger is not used!')
 
     # make a media logger
@@ -89,6 +92,7 @@ def main(cfg : DictConfig) -> None:
         loggers=loggers,
         dir=out_dir,
         eval_env=eval_env,
+        id=run_id,
     )
 
     # load the models

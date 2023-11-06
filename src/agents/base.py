@@ -3,6 +3,7 @@ from src.utils import (
     load_weights_from_disk,
     conf_to_dict,
     make_output_dir,
+    id_generator,
 )
 from src.extratypes import *
 from omegaconf import DictConfig
@@ -20,7 +21,8 @@ class BaseAgent:
             device: torch.device, 
             loggers: list = [],
             dir: Optional[str] = None,
-            eval_env: Optional[VectorEnv] = None
+            eval_env: Optional[VectorEnv] = None,
+            id: Optional[str] = None,
         ):
         self.env = env
         self.config = config
@@ -28,8 +30,10 @@ class BaseAgent:
         self.device = device
         self.dir = make_output_dir() if dir is None else dir
         self.eval_env = eval_env
+        self.id = id_generator() if id is None else id
 
     def log(self, data: dict, step: Optional[int] = None) -> None:
+        data.update({'id' : self.id,})
         for logger in self.loggers:
             logger.log(data, step=step)
 

@@ -31,7 +31,8 @@ class PredictiveControlAgent(BaseAgent):
             device: torch.device,
             loggers: list = [],
             dir: Optional[str] = None,
-            eval_env: Optional[gym.vector.VectorEnv] = None
+            eval_env: Optional[gym.vector.VectorEnv] = None,
+            id: Optional[str] = None,
             ):
         
         super().__init__(
@@ -40,7 +41,8 @@ class PredictiveControlAgent(BaseAgent):
             device,
             loggers,
             dir,
-            eval_env
+            eval_env,
+            id,
             )
 
         # initialize config
@@ -58,9 +60,6 @@ class PredictiveControlAgent(BaseAgent):
         self.transition_batch_size = self.transition_config.learning.params.get("batch_size", 128)
         self.policy_batches_per_iteration = self.policy_config.learning.params.get("batches_per_iteration", 1)
         self.policy_batch_size = self.policy_config.learning.params.get("batch_size", 128)
-
-        # plotting parameters
-        # self.plot_eval = self.run_config.plot_eval
 
         # initialize dimensions
         self.action_dim = env.action_space.shape[1]
@@ -257,6 +256,8 @@ class PredictiveControlAgent(BaseAgent):
                 "epochs": self.epochs,
                 "policy model updates": self.policy_updates,
                 "transition model updates": self.transition_updates,
+                "policy model parameters": self.policy_model.count_parameters(),
+                "transition model parameters": self.transition_model.count_parameters(),
             }
             results.update(dict_mean(transition_results, prefix=self.transition_model.name + " "))
             results.update(dict_mean(policy_results, prefix=self.policy_model.name + " "))

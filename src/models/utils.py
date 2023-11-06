@@ -159,7 +159,7 @@ def make_snn_objects(config: DictConfig) -> dict:
     # get the connection type
     params['connection_type'] = get_connection_class(config.params.connection.get('n_dims', None))
     params['connection_kwargs'] = config.params.connection.get('kwargs', {})
-    if params['connection_kwargs'].get('n_dims', 0) is 0:
+    if params['connection_kwargs'].get('n_dims', 0) in [0, None]:
         del params['connection_kwargs'].n_dims
 
     # make the initializer
@@ -235,7 +235,7 @@ def get_layer_class(type: str = 'default') -> torch.nn.Module:
         raise NotImplementedError(f"the layer {type} is not implemented")
 
 
-def get_connection_class(n_dims: int = 0) -> Connection:
+def get_connection_class(n_dims: Optional[int] = None) -> Connection:
     """ get the connection class
     Args:
         n_dims (int): number of dimensions. Defaults to 0.
@@ -243,7 +243,7 @@ def get_connection_class(n_dims: int = 0) -> Connection:
         Connection: connection class    
     """
 
-    if n_dims == 0:
+    if n_dims == 0 or n_dims is None:
         return Connection
     else:
         return BottleneckLinearConnection

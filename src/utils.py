@@ -5,6 +5,8 @@ from .extratypes import *
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, field
+import string
+import random
 
 
 @dataclass
@@ -25,6 +27,10 @@ class FrameStack:
 
     def __len__(self) -> int:
         return len(self.frames)
+
+
+def id_generator(size=8, chars=string.ascii_lowercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
 
 
 def make_output_dir() -> Path:
