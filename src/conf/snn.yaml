@@ -29,10 +29,10 @@ model:
       type: normal
       kwargs:
         time_step: ${model.time.dt}
-        sigma_u: 1.0
-        nu: 100
-        bias_scale: 1.0
-        scaling: 1.0
+        sigma_u: ${model.initializer.sigma_u}
+        nu: ${model.initializer.nu}
+        bias_scale: ${model.initializer.bias_scale}
+        scaling: ${model.initializer.scaling}
     activation:
       type: ${model.activation.type}
       kwargs:

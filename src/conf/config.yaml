@@ -21,6 +21,11 @@ model:
   connection:
     n_dims: null
   hidden_dim: 1024
+  initializer:
+    sigma_u: 1.0
+    nu: 100
+    bias_scale: 1.0
+    scaling: 1.0
 
 optimizer:
   type: smorms3
