@@ -36,20 +36,7 @@ def main(cfg : DictConfig) -> None:
     # make the loggers
     pretty.install()
     loggers = []
-    if cfg.logging.console.use:
-        print('console logger is used!')
-        loggers.append(ConsoleLogger())
-
-    # make a pandas logger
-    if cfg.logging.pandas.use:
-        print('pandas logger is used!')
-        loggers.append(PandasLogger(out_dir))
-
-    # make an experiment pandas logger
-    if cfg.logging.pandas.use:
-        print('experiment pandas logger is used!')
-        loggers.append(PandasLogger(experiment_dir, cfg=cfg))
-
+    
     # initialize wandb
     if cfg.logging.wandb.use:
         print('wandb logger is used!')
@@ -68,6 +55,23 @@ def main(cfg : DictConfig) -> None:
         run = None
         run_id = id_generator()
         print('wandb logger is not used!')
+
+    # make a console logger
+    if cfg.logging.console.use:
+        print('console logger is used!')
+        loggers.append(ConsoleLogger())
+
+    # make a pandas logger
+    if cfg.logging.pandas.use:
+        print('pandas logger is used!')
+        loggers.append(PandasLogger(out_dir))
+
+    # make an experiment pandas logger
+    if cfg.logging.pandas.use:
+        print('experiment pandas logger is used!')
+        loggers.append(PandasLogger(experiment_dir, cfg=cfg))
+
+
 
     # make a media logger
     if cfg.logging.media.use:
