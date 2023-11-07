@@ -97,8 +97,6 @@ def main(cfg : DictConfig) -> None:
         id=run_id,
     )
 
-    exit()
-
     # load the models
     load_dir = cfg.run.load_dir
     if load_dir is not None:
