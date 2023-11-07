@@ -60,6 +60,7 @@ class PredictiveControlAgent(BaseAgent):
         self.transition_batch_size = self.transition_config.learning.params.get("batch_size", 128)
         self.policy_batches_per_iteration = self.policy_config.learning.params.get("batches_per_iteration", 1)
         self.policy_batch_size = self.policy_config.learning.params.get("batch_size", 128)
+        self.eval_first = config.run.get("eval_first", True)
 
         # initialize dimensions
         self.action_dim = env.action_space.shape[1]
@@ -109,7 +110,7 @@ class PredictiveControlAgent(BaseAgent):
 
     def run(self, total_steps: int):
 
-        self.test(steps=self.steps_per_evaluation, render=True)
+        if self.eval_first: self.test(steps=self.steps_per_evaluation, render=True)
         while self.steps < total_steps:
             self.collect_rollouts(self.steps_per_iteration, self.reset_memory)
             self.train()

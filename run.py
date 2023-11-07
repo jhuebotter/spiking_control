@@ -71,8 +71,6 @@ def main(cfg : DictConfig) -> None:
         print('experiment pandas logger is used!')
         loggers.append(PandasLogger(experiment_dir, cfg=cfg))
 
-
-
     # make a media logger
     if cfg.logging.media.use:
         print('media logger is used!')
@@ -98,6 +96,8 @@ def main(cfg : DictConfig) -> None:
         eval_env=eval_env,
         id=run_id,
     )
+
+    exit()
 
     # load the models
     load_dir = cfg.run.load_dir

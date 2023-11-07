@@ -51,6 +51,7 @@ task:
 run:
   load_dir: null
   prediction_unroll: 20
+  eval_first: true
 
 plotting:
   render_every: 20
@@ -59,7 +60,6 @@ plotting:
 
 learning:
   total_steps: 500_000
-
 
 hydra:
   run:
