@@ -2,6 +2,9 @@
 This work is developed by Justus Huebotter in 2022 and 2023 as part of the <a href="https://spikeference.eu/">SPIKEFERENCE project</a>, co-founded by the Human Brain Project (HBP) Specific Grant Agreement 3 (ID: 945539) and the Donders Institute for Brain, Cognition and Behaviour. 
 
 In this project, we revisit policy optimization for low-level continuous control tasks with spiking neural networks. In particular, we use prediction errors to learn the dynamics of the system in a recurrent *transition model*. We show that we can then use this model to  drive the learning of an amortized *policy model* for goal reaching by imagining state trajectory rollouts, even when interaction with the real environment is limited.
+![image](https://github.com/jhuebotter/spiking_control/assets/63585846/fcee796d-7cab-4968-852c-f5e128cc8194)
+![image](https://github.com/jhuebotter/spiking_control/assets/63585846/126f86c6-b192-4cae-9dac-e0760f6123ae)
+
 
 <img src="figures/Spikeference_figure.png" width="600" />
 
