@@ -5,7 +5,6 @@ model:
   params:
     num_rec_layers: 0
     num_ff_layers: 2
-    activation_steepness: 1.0
     output_scale: 1.0
 
 learning:

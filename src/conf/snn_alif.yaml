@@ -5,10 +5,11 @@ model:
     dt: ${model.time.dt}
     repeat_input: 8
     out_style: last
+    activation_steepness: 1.0
     input:
       type: input
       kwargs: 
-        scaling: 0.1
+        scaling: 0.01
     neuron:
       type: alif
       kwargs:
@@ -68,8 +69,8 @@ model:
 optimizer: ${optimizer}
 
 learning:
-  batches_per_iteration: 2
+  batches_per_iteration: 25
   params:
-    batch_size: 1024
+    batch_size: 512
     max_norm: 30
     warmup_steps: 5
