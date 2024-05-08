@@ -101,7 +101,7 @@ def get_grad_norm(model: torch.nn.Module) -> float:
     return total_norm
 
 
-def get_device(device: str = 'cuda') -> torch.device:
+def get_device(device: str = 'cuda', verbose: bool = True) -> torch.device:
     """get the device to run the code on.
     Returns:
         torch.device: device object
@@ -111,6 +111,8 @@ def get_device(device: str = 'cuda') -> torch.device:
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
+    if verbose:
+        print(f'Using device: {device}')
     return device
 
 

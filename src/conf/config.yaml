@@ -20,7 +20,9 @@ model:
     beta: 25
   connection:
     n_dims: null
-  hidden_dim: 1024
+  hidden_dim: 
+    - 1024
+    - 512
   initializer:
     sigma_u: 1.0
     nu: 10

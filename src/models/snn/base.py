@@ -33,7 +33,7 @@ class BaseRSNN(torch.nn.Module):
     def __init__(
         self,
         input_dim: int,
-        hidden_dim: int,
+        hidden_dim: Union[int, list[int]],
         output_dim: int,
         num_rec_layers: int = 0,
         num_ff_layers: int = 1,
@@ -66,10 +66,14 @@ class BaseRSNN(torch.nn.Module):
         # gather layer parameters
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.hidden_dim = hidden_dim
         self.dt = dt
         self.num_rec_layers = num_rec_layers
         self.num_ff_layers = num_ff_layers
+        self.num_layers = num_rec_layers + num_ff_layers
+        if isinstance(hidden_dim, int):
+            hidden_dim = [hidden_dim] * self.num_layers
+        assert len(hidden_dim) == self.num_layers
+        self.hidden_dim = hidden_dim
         self.repeat_input = repeat_input
         self.input_type = input_type
         self.input_kwargs = {**input_kwargs}
@@ -106,7 +110,7 @@ class BaseRSNN(torch.nn.Module):
             new = Layer(
                 name=f"{self.name} Recurrent LIF Cell Group {i+1}",
                 model=self.model,
-                size=self.hidden_dim,
+                size=self.hidden_dim[len(layers)],
                 input_group=prev,
                 recurrent=True,
                 regs=self.regularizers,
@@ -158,7 +162,7 @@ class BaseRSNN(torch.nn.Module):
             new = Layer(
                 name=f"{self.name} FF LIF Cell Group {i+1}",
                 model=self.model,
-                size=hidden_dim,
+                size=hidden_dim[len(layers)],
                 input_group=prev,
                 recurrent=False,
                 regs=self.regularizers,
@@ -206,6 +210,8 @@ class BaseRSNN(torch.nn.Module):
             prev = new.output_group
 
         # make the readout
+        readout_connection_kwargs = self.connection_kwargs.copy()
+        readout_connection_kwargs["bias"] = False
         new = Layer(
             name=f"{self.name} Readout Pool Layer",
             model=self.model,
@@ -217,7 +223,7 @@ class BaseRSNN(torch.nn.Module):
             connection_class=self.connection_type,
             neuron_class=self.readout_type,
             neuron_kwargs=self.readout_kwargs,
-            connection_kwargs=self.connection_kwargs,
+            connection_kwargs=readout_connection_kwargs,
         )
         layers.append(new)
         self.model.add_monitor(
