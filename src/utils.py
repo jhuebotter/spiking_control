@@ -74,7 +74,7 @@ def dict_mean(dict_list: list[dict[str, float]], prefix: str = '') -> dict:
             elif isinstance(value, dict):
                 mean_dict[new_key] = dict_mean([d[key] for d in dict_list], prefix=f'{new_key}.')
             elif isinstance(value, torch.Tensor):
-                mean_dict[new_key] = np.mean([d[key].numpy() for d in dict_list])
+                mean_dict[new_key] = np.mean([d[key].numpy() for d in dict_list], axis=0)
 
     return mean_dict
 

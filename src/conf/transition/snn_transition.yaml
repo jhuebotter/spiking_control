@@ -1,10 +1,12 @@
 defaults:
-  - /snn
+  - /snn_alif
 
 model:
   params:
     num_rec_layers: 1
     num_ff_layers: 1 
+    activation_steepness: 1.0
+    output_scale: 0.1
 
 learning:
   params:

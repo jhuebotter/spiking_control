@@ -96,6 +96,9 @@ class BasePRNN(nn.Module):
         """move model to device and update device attribute"""
         self.device = device
         self.model.to(device)
+        for p in self.parameters():
+            if not p.device == self.device:
+                p.data = p.to(self.device)
         super().to(device)
         return self
 

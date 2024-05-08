@@ -25,6 +25,7 @@ class ReacherEnv(gym.Env):
         dt: float = 0.02,
         eval: bool = False,
         full_target_obs: bool = False,
+        zoom: float = 1.0,
         **kwargs
     ):
         self.metadata = {
@@ -62,7 +63,7 @@ class ReacherEnv(gym.Env):
 
         self.render_mode = render_mode
         self.show_target_arm = show_target_arm
-        self.screen_px = 256
+        self.screen_px = int(256 * zoom)
 
         self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
         self.observation_noise_std = np.ones(8) * 0.01

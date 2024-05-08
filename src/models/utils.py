@@ -5,6 +5,7 @@ from control_stork.nodes import (
     CellGroup,
     InputGroup,
     FastLIFGroup,
+    AdaptiveLIFGroup,
     FastReadoutGroup,
     DirectReadoutGroup,
     TimeAverageReadoutGroup,
@@ -225,6 +226,8 @@ def get_layer_class(type: str = "default") -> torch.nn.Module:
         return InputGroup
     elif type == "lif":
         return FastLIFGroup
+    elif type == "alif":
+        return AdaptiveLIFGroup
     elif type == "readout":
         return FastReadoutGroup
     else:

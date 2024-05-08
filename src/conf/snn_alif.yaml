@@ -1,0 +1,75 @@
+model:
+  type: rsnn
+  params:
+    hidden_dim: ${model.hidden_dim}
+    dt: ${model.time.dt}
+    repeat_input: 8
+    out_style: last
+    input:
+      type: input
+      kwargs: 
+        scaling: 0.1
+    neuron:
+      type: alif
+      kwargs:
+        reset: sub
+        tau_mem: ${model.time.tau_mem}
+        tau_syn: ${model.time.tau_syn}
+        tau_ada: 0.1
+        learn_mem: true
+        learn_syn: true
+        learn_ada: false
+        learn_param: tau
+        mem_param: full
+        syn_param: full
+        ada_param: single
+    readout:
+      type: readout
+      kwargs:
+        tau_mem: ${model.time.tau_mem}
+        tau_syn: ${model.time.tau_syn}
+        n_readouts: 25
+    connection:
+      n_dims: ${model.connection.n_dims}
+      kwargs:
+        bias: true
+        n_dims: ${model.connection.n_dims}
+    initializer:
+      type: normal
+      kwargs:
+        time_step: ${model.time.dt}
+        sigma_u: ${model.initializer.sigma_u}
+        nu: ${model.initializer.nu}
+        bias_scale: ${model.initializer.bias_scale}
+        scaling: ${model.initializer.scaling}
+    activation:
+      type: ${model.activation.type}
+      kwargs:
+        beta: ${model.activation.beta}
+    regularization:
+      activity:
+        - type: LowerBoundL2
+          kwargs:
+            strength: ${LowerBoundL2.strength}
+            threshold: ${LowerBoundL2.threshold}
+            basis: ${LowerBoundL2.basis}
+            dims: null
+        - type: UpperBoundL2
+          kwargs:
+            strength: ${UpperBoundL2.strength}
+            threshold: ${UpperBoundL2.threshold}
+            basis: ${UpperBoundL2.basis}
+            dims: 1
+      weights:
+      - type: L2
+        kwargs:
+          strength: 0.001
+
+optimizer: ${optimizer}
+
+learning:
+  batches_per_iteration: 2
+  params:
+    batch_size: 1024
+    max_norm: 30
+    warmup_steps: 5

@@ -19,6 +19,7 @@ from control_stork.monitors import (
     PlotStateMonitor,
     PopulationSpikeCountMonitor,
     ActiveNeuronMonitor,
+    PropertyMonitor,
 )
 from control_stork.plotting import plot_spikes, plot_traces
 from control_stork.activations import SigmoidSpike
@@ -53,6 +54,9 @@ class BaseRSNN(torch.nn.Module):
         ),
         regularizers: list = [],
         w_regularizers: list = [],
+        activation_steepness: float = None,
+        activation_bias: float = None,
+        output_scale: float = None,
         device: torch.device = torch.device("cpu"),
         name: str = "RSNN",
         # **kwargs,
@@ -96,6 +100,7 @@ class BaseRSNN(torch.nn.Module):
                 self.input_dim, name=f"{self.name} Input Group", **self.input_kwargs
             )
         )
+        layers = []
         first = True
         for i in range(num_rec_layers):
             new = Layer(
@@ -114,7 +119,7 @@ class BaseRSNN(torch.nn.Module):
                 recurrent_connection_kwargs=self.connection_kwargs,
             )
             first = False
-            self.initializer.initialize(new)
+            layers.append(new)
             self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
@@ -135,6 +140,18 @@ class BaseRSNN(torch.nn.Module):
                 PopulationSpikeCountMonitor(new.output_group, avg=True)
             )
             self.model.add_monitor(ActiveNeuronMonitor(new.output_group))
+            self.model.add_monitor(
+                PropertyMonitor(
+                    new.output_group,
+                    "tau_mem",
+                )
+            )
+            self.model.add_monitor(
+                PropertyMonitor(
+                    new.output_group,
+                    "tau_syn",
+                )
+            )
 
             prev = new.output_group
         for i in range(num_ff_layers):
@@ -152,7 +169,7 @@ class BaseRSNN(torch.nn.Module):
                 connection_kwargs=dict(bias=True) if first else self.connection_kwargs,
             )
             first = False
-            self.initializer.initialize(new)
+            layers.append(new)
             self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
@@ -173,6 +190,18 @@ class BaseRSNN(torch.nn.Module):
                 PopulationSpikeCountMonitor(new.output_group, avg=True)
             )
             self.model.add_monitor(ActiveNeuronMonitor(new.output_group))
+            self.model.add_monitor(
+                PropertyMonitor(
+                    new.output_group,
+                    "tau_mem",
+                )
+            )
+            self.model.add_monitor(
+                PropertyMonitor(
+                    new.output_group,
+                    "tau_syn",
+                )
+            )
 
             prev = new.output_group
 
@@ -190,7 +219,7 @@ class BaseRSNN(torch.nn.Module):
             neuron_kwargs=self.readout_kwargs,
             connection_kwargs=self.connection_kwargs,
         )
-        self.initializer.initialize(new)
+        layers.append(new)
         self.model.add_monitor(
             PlotStateMonitor(
                 new.output_group,
@@ -234,7 +263,6 @@ class BaseRSNN(torch.nn.Module):
             Connection(prev, new, bias=False, requires_grad=False)
         )
         readout_initializer = AverageInitializer()
-        con.init_parameters(readout_initializer)
 
         # configure the model
         # TODO: Rework how optimizers work!
@@ -244,10 +272,42 @@ class BaseRSNN(torch.nn.Module):
             time_step=self.dt,
         )
 
+        for layer in layers:
+            self.initializer.initialize(layer)
+        con.init_parameters(readout_initializer)
+
+        if activation_steepness is not None:
+            self.activation_steepness = torch.nn.Parameter(torch.tensor(activation_steepness), requires_grad=True)
+        else:
+            self.activation_steepness = 1.0
+
+        if activation_bias is not None:
+            self.activation_bias = torch.nn.Parameter(torch.tensor(activation_bias), requires_grad=True)
+        else:
+            self.activation_bias = 0.0
+        if output_scale is not None:
+            self.output_scale = torch.nn.Parameter(torch.tensor(output_scale), requires_grad=True)
+        else:
+            self.output_scale = 1.0
+
+        self.model.add_monitor(
+            PropertyMonitor(
+                self,
+                "activation_steepness",
+            )
+        )
+
+        self.model.add_monitor(
+            PropertyMonitor(
+                self,
+                "output_scale",
+            )
+        )
+
         self.optimizer = None
         self.state_initialized = False
 
-        self.numeric_monitors = ["PopulationSpikeCountMonitor", "ActiveNeuronMonitor"]
+        self.numeric_monitors = ["PopulationSpikeCountMonitor", "ActiveNeuronMonitor", "PropertyMonitor"]
         self.plot_monitors = ["PlotStateMonitor"]
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
@@ -282,7 +342,11 @@ class BaseRSNN(torch.nn.Module):
         """move model to device"""
         self.device = device
         self.model.to(device)
-        super().to(device)
+        for p in self.parameters():
+            if not p.device == self.device:
+                p.data = p.to(self.device)
+
+        super().to(self.device)
         return self
 
     def count_parameters(self):
@@ -298,7 +362,11 @@ class BaseRSNN(torch.nn.Module):
 
     def step(self, x: Tensor, record: bool = False) -> Tensor:
         """perform a single step of the model"""
-        return torch.tanh(self.model(x, record=record))
+        return self.output_activation(self.model(x, record=record))
+
+    def output_activation(self, x: Tensor) -> Tensor:
+        """apply the output activation function"""
+        return self.output_scale * torch.tanh(self.activation_bias + self.activation_steepness * x)
 
     def forward(self, *args: Tensor, record: bool = False, **kwargs) -> Tensor:
         """forward pass of the model on an input sequence"""

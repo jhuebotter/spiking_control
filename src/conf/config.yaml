@@ -23,7 +23,7 @@ model:
   hidden_dim: 1024
   initializer:
     sigma_u: 1.0
-    nu: 100
+    nu: 10
     bias_scale: 1.0
     scaling: 1.0
 
@@ -59,7 +59,7 @@ plotting:
   prediction_animation_step: 2
 
 learning:
-  total_steps: 500_000
+  total_steps: 10_000
 
 hydra:
   run:

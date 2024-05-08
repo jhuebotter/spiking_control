@@ -117,6 +117,17 @@ class BaseLogger:
 
         return self.is_figure(val) or self.is_video(val)
 
+    def is_array(self, val) -> bool:
+        """detect if the value is a numpy array
+        Args:
+            val (any): value
+
+        Returns:
+            bool: True if the value is a numpy array, else False
+        """
+
+        return isinstance(val, np.ndarray)
+
 
 class WandBLogger(BaseLogger):
     """wandb logger class"""
@@ -168,8 +179,8 @@ class WandBLogger(BaseLogger):
             elif val is None:
                 pass
             # detect if the value is an image
-            # elif self.is_figure(val):
-            #    self.log_data(key, wandb.Image(val))
+            elif self.is_array(val):
+                self.log_data(key, torch.Tensor(val))
             # detect if the value is a video
             # elif self.is_video(val):
             #    self.log_data(key, wandb.Video(val))
@@ -291,6 +302,7 @@ class PandasLogger(BaseLogger):
         dir: str,
         file: str = "results.csv",
         cfg: Optional[dict] = None,
+        mean_arrays: bool = True,
     ) -> None:
         super().__init__()
         self.dir = Path(dir)
@@ -300,6 +312,7 @@ class PandasLogger(BaseLogger):
         print("results will be saved at", self.path)
         self.reset_local_data()
         self.max_attempts = 60
+        self.mean_arrays = mean_arrays
         self.cfg = conf_to_dict(cfg) if cfg is not None else None
         if self.cfg is not None:
             self.log_config()
@@ -362,6 +375,11 @@ class PandasLogger(BaseLogger):
             elif self.is_media(val):
                 # no need to log images
                 pass
+            elif self.is_array(val):
+                if self.mean_arrays:
+                    self.log_data(key, np.mean(val))
+                else:
+                    self.log_iterable(list(val), prefix=key)
             elif val is None:
                 self.log_data(key, 'None')
             # else throw an error
@@ -566,6 +584,8 @@ class MediaLogger(BaseLogger):
             elif self.is_media(val):
                 self.log_data(key, val)
             # else throw an error
+            elif self.is_array(val):
+                pass
             else:
                 raise ValueError(f"Cannot log data of type {type(data)}")
 
