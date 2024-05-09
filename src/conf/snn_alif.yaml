@@ -5,7 +5,7 @@ model:
     dt: ${model.time.dt}
     repeat_input: 8
     out_style: last
-    activation_steepness: 1.0
+    activation_steepness: ${model.output.activation_steepness}
     input:
       type: input
       kwargs: 
