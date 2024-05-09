@@ -28,6 +28,8 @@ model:
     nu: 10
     bias_scale: 1.0
     scaling: 1.0
+  input:
+    scaling: 0.01
   output:
     activation_steepness: 1.0
 

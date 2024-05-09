@@ -9,7 +9,7 @@ model:
     input:
       type: input
       kwargs: 
-        scaling: 0.01
+        scaling: ${model.input.scaling}
     neuron:
       type: alif
       kwargs:
