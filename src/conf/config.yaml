@@ -29,7 +29,7 @@ model:
     bias_scale: 1.0
     scaling: 1.0
   input:
-    scaling: 0.01
+    scaling: 0.1
   output:
     activation_steepness: 1.0
 
@@ -40,8 +40,8 @@ optimizer:
 
 LowerBoundL2:
   strength: 0.0
-  threshold: 0.0
-  basis: out
+  threshold: -10.0
+  basis: mem
 UpperBoundL2:
   strength: 0.0
   threshold: 0.3

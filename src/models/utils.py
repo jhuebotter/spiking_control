@@ -35,6 +35,8 @@ def make_transition_model(
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
         "num_ff_layers": config.params.get("num_ff_layers", 2),
+        "activation_steepness": config.params.get("activation_steepness", 1.0),
+        "output_scale": config.params.get("output_scale", 0.1),
         **kwargs,
     }
     if type_ == "prnn":
@@ -59,6 +61,19 @@ def make_transition_model(
     )
     if params["activation"] is None:
         params.pop("activation")
+
+    for k, v in config.params.items():
+        print(k, v)
+        if k in params:
+            print("value in params", params[k])
+        else:    
+            print("value not in params")
+        print()
+
+    print(params)
+    print()
+    #print(config.params)
+    exit()
 
     transitionnet = model(
         action_dim=action_dim,
@@ -86,6 +101,8 @@ def make_policy_model(
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
         "num_ff_layers": config.params.get("num_ff_layers", 2),
+        "activation_steepness": config.params.get("activation_steepness", 1.0),
+        "output_scale": config.params.get("output_scale", 1.0),
         **kwargs,
     }
     if type_ == "prnn":
