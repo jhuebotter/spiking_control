@@ -133,6 +133,7 @@ class PredictiveControlAgent(BaseAgent):
 
         self.finish_run()
 
+    @torch.no_grad()
     def collect_rollouts(self, steps: int, reset_memory: bool = True):
 
         self.policy_model.eval()
@@ -147,119 +148,104 @@ class PredictiveControlAgent(BaseAgent):
         action_min = torch.tensor(self.env.action_space.low, device=self.device)
         action_max = torch.tensor(self.env.action_space.high, device=self.device)
 
-        with torch.no_grad():
+        # reset the environment
+        observations, infos = self.env.reset()
+        # check if the observation dict contains tensors or arrays
+        if isinstance(observations["proprio"], torch.Tensor):
+            obs = observations["proprio"].clone()
+            targets = observations["target"].clone()
+        else:
+            obs = torch.tensor(
+                observations["proprio"], device=self.device, dtype=torch.float32
+            )
+            targets = torch.tensor(
+                observations["target"], device=self.device, dtype=torch.float32
+            )
 
-            # reset the environment
-            observations, infos = self.env.reset()
-            # check if the observation dict contains tensors or arrays
-            if isinstance(observations["proprio"], torch.Tensor):
-                obs = observations["proprio"].clone()
-                targets = observations["target"].clone()
-            else:
-                obs = torch.tensor(
-                    observations["proprio"], device=self.device, dtype=torch.float32
+        self.policy_model.reset_state()
+
+        step = 0
+        total_reward = 0
+        completed_episodes = 0
+        with tqdm(
+            total=steps,
+            desc=f"{'obtaining experience':30}",
+        ) as pbar:
+            while step < steps:
+
+                # predict the action
+                actions = self.policy_model.predict(obs, targets)
+                actions = actions.squeeze(0).clamp(action_min, action_max).detach()
+
+                # step the environment
+                observations, rewards, terminates, truncateds, infos = (
+                    self.env.step(actions)
                 )
-                targets = torch.tensor(
-                    observations["target"], device=self.device, dtype=torch.float32
-                )
 
-            self.policy_model.reset_state()
+                dones = [
+                    True if ter or tru else False
+                    for ter, tru in zip(terminates, truncateds)
+                ]
+                if isinstance(observations["proprio"], torch.Tensor):
+                    next_obs = observations["proprio"].clone()
+                else:
+                    next_obs = torch.tensor(
+                        observations["proprio"],
+                        device=self.device,
+                        dtype=torch.float32,
+                    )
+                if "_final_observation" in infos.keys():
+                    final = infos["_final_observation"]
+                    for i, f in enumerate(final):
+                        if f:
+                            if isinstance(
+                                infos["final_observation"][i]["proprio"],
+                                torch.Tensor,
+                            ):
+                                next_obs[i] = infos["final_observation"][i][
+                                    "proprio"
+                                ].clone()
+                            else:
+                                next_obs[i] = torch.tensor(
+                                    infos["final_observation"][i]["proprio"],
+                                    device=self.device,
+                                    dtype=torch.float32,
+                                )
 
-            step = 0
-            total_reward = 0
-            with tqdm(
-                total=steps,
-                desc=f"{'obtaining experience':30}",
-            ) as pbar:
-                while step < steps:
+                # store the transition
+                for i, (o, t, a, r, d, no) in enumerate(
+                    zip(obs, targets, actions, rewards, dones, next_obs)
+                ):
+                    episodes[i].append(Transition(o, t, a, r, d, no))
+                    if d:
+                        # ! This only adds complete episodes to the memory
+                        self.memory.append(episodes[i])
+                        total_reward += episodes[i].get_cummulative_reward()
+                        episodes[i] = Episode()
+                        completed_episodes += 1
+                        self.episodes += 1
 
-                    # predict the action
-                    actions = self.policy_model.predict(obs, targets)
-                    actions = actions.squeeze(0).clamp(action_min, action_max).detach()
-
-                    # step the environment
-                    observations, rewards, terminates, truncateds, infos = (
-                        self.env.step(actions)
+                # update the state
+                if isinstance(observations["proprio"], torch.Tensor):
+                    obs = observations["proprio"].clone()
+                    targets = observations["target"].clone()
+                else:
+                    obs = torch.tensor(
+                        observations["proprio"],
+                        device=self.device,
+                        dtype=torch.float32,
+                    )
+                    targets = torch.tensor(
+                        observations["target"],
+                        device=self.device,
+                        dtype=torch.float32,
                     )
 
-                    dones = [
-                        True if ter or tru else False
-                        for ter, tru in zip(terminates, truncateds)
-                    ]
-                    if isinstance(observations["proprio"], torch.Tensor):
-                        next_obs = observations["proprio"].clone()
-                    else:
-                        next_obs = torch.tensor(
-                            observations["proprio"],
-                            device=self.device,
-                            dtype=torch.float32,
-                        )
-                    if "_final_observation" in infos.keys():
-                        final = infos["_final_observation"]
-                        for i, f in enumerate(final):
-                            if f:
-                                if isinstance(
-                                    infos["final_observation"][i]["proprio"],
-                                    torch.Tensor,
-                                ):
-                                    next_obs[i] = infos["final_observation"][i][
-                                        "proprio"
-                                    ].clone()
-                                else:
-                                    next_obs[i] = torch.tensor(
-                                        infos["final_observation"][i]["proprio"],
-                                        device=self.device,
-                                        dtype=torch.float32,
-                                    )
-
-                    # make sure the other local variables are tensors
-                    if isinstance(rewards, torch.Tensor):
-                        rewards = rewards.clone()
-                    else:
-                        rewards = torch.tensor(
-                            rewards, device=self.device, dtype=torch.float32
-                        )
-
-                    if isinstance(dones, torch.Tensor):
-                        dones = dones.clone()
-                    else:
-                        dones = torch.tensor(
-                            dones, device=self.device, dtype=torch.bool
-                        )
-
-                    # store the transition
-                    for i, (o, t, a, r, d, no) in enumerate(
-                        zip(obs, targets, actions, rewards, dones, next_obs)
-                    ):
-                        episodes[i].append(Transition(o, t, a, r, d, no))
-                        if d:
-                            # ! This only adds complete episodes to the memory
-                            self.memory.append(episodes[i])
-                            total_reward += episodes[i].get_cummulative_reward()
-                            episodes[i] = Episode()
-                            self.episodes += 1
-
-                    # update the state
-                    if isinstance(observations["proprio"], torch.Tensor):
-                        obs = observations["proprio"].clone()
-                        targets = observations["target"].clone()
-                    else:
-                        obs = torch.tensor(
-                            observations["proprio"],
-                            device=self.device,
-                            dtype=torch.float32,
-                        )
-                        targets = torch.tensor(
-                            observations["target"],
-                            device=self.device,
-                            dtype=torch.float32,
-                        )
-
-                    step += num_envs
-                    pbar.update(num_envs)
+                step += num_envs
+                pbar.update(num_envs)
 
         self.steps += step
-        average_reward = total_reward / len(episodes)
+        average_reward = total_reward / completed_episodes
         results = {
             "train average reward": average_reward,
         }
@@ -347,6 +333,7 @@ class PredictiveControlAgent(BaseAgent):
             # log the results
             self.log(results, step=self.epochs)
 
+    @torch.no_grad()
     def test(
         self,
         steps: int,
@@ -449,22 +436,6 @@ class PredictiveControlAgent(BaseAgent):
                                         device=self.device,
                                         dtype=torch.float32,
                                     )
-
-                    """
-                    if isinstance(rewards, torch.Tensor):
-                        rewards = rewards.clone()
-                    else:
-                        rewards = torch.tensor(
-                            rewards, device=self.device, dtype=torch.float32
-                        )
-                    
-                    if isinstance(dones, torch.Tensor):
-                        dones = dones.clone()
-                    else:
-                        dones = torch.tensor(
-                            dones, device=self.device, dtype=torch.bool
-                        ) 
-                    """
 
                     # store the transition
                     for i, (o, t, a, r, d, no) in enumerate(

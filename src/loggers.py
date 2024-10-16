@@ -11,9 +11,34 @@ from pathlib import Path
 import time
 from src.utils import conf_to_dict
 import logging
+import copy
+import gc
 
 logging.getLogger("PIL").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
+
+def cleanup(dct: dict, level: int = 0):
+    """recursively close all figures and animations in a dictionary
+    Args:
+        dict (dict): dictionary
+        level (int, optional): level. Defaults to 0.
+    Returns:
+        None
+    """
+    # properly close all figures and animations in the dictionary
+    for key, val in dct.items():
+        if isinstance(val, plt.Figure):
+            plt.close(val)
+        elif isinstance(val, dict):
+            cleanup(val, level=level + 1)
+        # delete all references to the dictionary and its contents
+        del val
+    dct.clear()
+    # call the garbage collector
+    if level == 0:
+        del dct
+        gc.collect()
 
 
 class BaseLogger:
@@ -349,7 +374,7 @@ class PandasLogger(BaseLogger):
 
         assert isinstance(key, str), "key must be a string"
         assert self.is_value(value), "value must be an int, float, str, or bool"
-        self.data[key] = value
+        self.data[key] = copy.deepcopy(value)
 
     def log(
         self, data: dict, prefix: Optional[str] = None, step: Optional[int] = None
@@ -560,7 +585,6 @@ class MediaLogger(BaseLogger):
                 plt.axis("off")
                 plt.tight_layout()
                 self.save_fig_to_file(fig, path)
-                plt.close(fig)
 
             if self.run is not None:
                 self.run.log({key: wandb.Image(str(path))}, step=self.get_step())

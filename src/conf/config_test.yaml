@@ -58,9 +58,9 @@ run:
   eval_first: true
 
 plotting:
-  render_every: 1
-  prediction_animation_unroll: 5  # change back to 50 or so
-  prediction_animation_step: 2
+  render_every: 20
+  prediction_animation_unroll: 50  # change back to 50 or so
+  prediction_animation_step: 5
 
 learning:
   total_steps: 1_280_000

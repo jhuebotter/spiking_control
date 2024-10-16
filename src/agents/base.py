@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 from gymnasium.vector import VectorEnv
 import torch
 from pathlib import Path
-from src.loggers import PandasLogger
+from src.loggers import PandasLogger, cleanup
 
 
 class BaseAgent:
@@ -36,6 +36,7 @@ class BaseAgent:
         data.update({'id' : self.id,})
         for logger in self.loggers:
             logger.log(data, step=step)
+        cleanup(data)
 
     def run(self):
         raise NotImplementedError
