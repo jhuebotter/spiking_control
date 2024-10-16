@@ -1,0 +1,70 @@
+defaults:
+  - task: franka
+  - agent: pred_agent
+  - policy: snn_policy
+  - transition: snn_transition
+  - logging: logging
+  - _self_
+
+seed: 42
+experiment: frankatest
+device: cuda
+
+model:
+  time:
+    dt: 0.002
+    tau_mem: 0.02
+    tau_syn: 0.01
+  activation:
+    type: sigmoidspike
+    beta: 25
+  connection:
+    n_dims: 64
+  hidden_dim: 
+    - 1024
+    - 512
+  initializer:
+    sigma_u: 1.0
+    nu: 10
+    bias_scale: 1.0
+    scaling: 1.0
+  input:
+    scaling: 0.1
+  output:
+    activation_steepness: 1.0
+
+optimizer:
+  type: smorms3
+  params:
+    lr: 0.0005
+
+LowerBoundL2:
+  strength: 0.0
+  threshold: -10.0
+  basis: mem
+UpperBoundL2:
+  strength: 0.0
+  threshold: 0.3
+  basis: out
+
+task:
+  params:
+    render_mode: rgb_array
+    full_target_obs: false
+
+run:
+  load_dir: null
+  prediction_unroll: 20
+  eval_first: true
+
+plotting:
+  render_every: 1
+  prediction_animation_unroll: 5  # change back to 50 or so
+  prediction_animation_step: 2
+
+learning:
+  total_steps: 1_280_000
+
+hydra:
+  run:
+    dir: ./outputs/${now:%Y-%m-%d}/${now:%H-%M-%S-%f}

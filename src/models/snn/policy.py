@@ -87,8 +87,10 @@ class PolicyNetRSNN(BaseRSNN):
             return torch.nn.functional.mse_loss(target, y_hat)
         use = torch.tensor(loss_gain['use'], device=self.device)
         gain = torch.tensor(loss_gain['gain'], device=self.device)
-        
-        return torch.mean(torch.pow(target[:, use] - y_hat[:, use], 2) * gain)
+
+        # ! This is the original code - why was target sliced?
+        #return torch.mean(torch.pow(target[:, use] - y_hat[:, use], 2) * gain)
+        return torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
 
     def train_fn(
             self,

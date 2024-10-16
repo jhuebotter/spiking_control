@@ -10,6 +10,10 @@ import pandas as pd
 from pathlib import Path
 import time
 from src.utils import conf_to_dict
+import logging
+
+logging.getLogger("PIL").setLevel(logging.WARNING)
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
 class BaseLogger:
@@ -128,6 +132,17 @@ class BaseLogger:
 
         return isinstance(val, np.ndarray)
 
+    def is_tensor(self, val) -> bool:
+        """detect if the value is a torch tensor
+        Args:
+            val (any): value
+
+        Returns:
+            bool: True if the value is a torch tensor, else False
+        """
+
+        return isinstance(val, torch.Tensor)
+
 
 class WandBLogger(BaseLogger):
     """wandb logger class"""
@@ -181,6 +196,8 @@ class WandBLogger(BaseLogger):
             # detect if the value is an image
             elif self.is_array(val):
                 self.log_data(key, torch.Tensor(val))
+            elif self.is_tensor(val):
+                self.log_data(key, val)
             # detect if the value is a video
             # elif self.is_video(val):
             #    self.log_data(key, wandb.Video(val))
@@ -375,13 +392,23 @@ class PandasLogger(BaseLogger):
             elif self.is_media(val):
                 # no need to log images
                 pass
+            # detect if the value is an array
+            elif self.is_tensor(val):
+                # check if the tensor has only a single value
+                if val.numel() == 1:
+                    self.log_data(key, val.item())
+                else:
+                    if self.mean_arrays:
+                        self.log_data(key, torch.mean(val).item())
+                    else:
+                        self.log_iterable(val.tolist(), prefix=key)
             elif self.is_array(val):
                 if self.mean_arrays:
                     self.log_data(key, np.mean(val))
                 else:
                     self.log_iterable(list(val), prefix=key)
             elif val is None:
-                self.log_data(key, 'None')
+                self.log_data(key, "None")
             # else throw an error
             else:
                 raise ValueError(f"Cannot log data of type {type(val)}")
@@ -420,7 +447,7 @@ class PandasLogger(BaseLogger):
                 # no need to log images
                 pass
             elif val is None:
-                self.log_data(key, 'None')
+                self.log_data(key, "None")
             # else throw an error
             else:
                 raise ValueError(f"Cannot log data of type {type(val)}")
@@ -523,6 +550,7 @@ class MediaLogger(BaseLogger):
             if isinstance(value, plt.Figure):
                 path = Path(self.dir, f"{key} {self.get_step()}.{self.image_format}")
                 self.save_fig_to_file(value, path)
+                plt.close(value)
 
             elif isinstance(value, np.ndarray):
                 # convert np array to plt figure
@@ -577,6 +605,8 @@ class MediaLogger(BaseLogger):
             # if the value is int, float, str, or bool, skip it
             elif self.is_value(val):
                 pass
+            elif self.is_tensor(val):
+                pass
             # if the value is a list or tuple, log it recursively
             elif isinstance(val, (list, tuple)):
                 self.log_iterable(val, prefix=key)
@@ -587,7 +617,7 @@ class MediaLogger(BaseLogger):
             elif self.is_array(val):
                 pass
             else:
-                raise ValueError(f"Cannot log data of type {type(data)}")
+                raise ValueError(f"Cannot log data of type {type(val)}")
 
     def log_iterable(self, data: Iterable, prefix: Optional[str] = None) -> None:
         """log an iterable to pandas dataframe

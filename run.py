@@ -19,7 +19,7 @@ from src.loggers import (
 )
 
 
-@hydra.main(version_base='1.3', config_path='src/conf', config_name='config')
+@hydra.main(version_base='1.3', config_path='src/conf', config_name='config_test')
 def main(cfg : DictConfig) -> None:
     
     # print the config
@@ -84,7 +84,10 @@ def main(cfg : DictConfig) -> None:
 
     # make the environment
     env = make_env(cfg.task, cfg.seed)
-    eval_env = make_env(cfg.task, eval=True, seed=1)
+    if cfg.task.num_eval_envs > 0:
+        eval_env = make_env(cfg.task, eval=True, seed=1)
+    else:
+        eval_env = None
 
     # make the models
     agent = PredictiveControlAgent(

@@ -99,22 +99,14 @@ class TwoDPlaneEnv(gym.Env):
                 dtype=np.float32,
             )
 
-        self.state_labels = [
-            "pos x", 
-            "pos y", 
-            "vel x", 
-            "vel y"
-        ]
+        self.state_labels = ["pos x", "pos y", "vel x", "vel y"]
 
         self.target_labels = [
             "pos x",
             "pos y",
         ]
 
-        self.loss_gain = {
-            'gain': np.array([1.0, 1.0]),
-            'use': np.array([0, 1])
-        }
+        self.loss_gain = {"gain": np.array([1.0, 1.0]), "use": np.array([0, 1])}
 
         self.set_seed(seed)
         self.screen = None
@@ -128,7 +120,7 @@ class TwoDPlaneEnv(gym.Env):
     def set_seed(self, seed=None):
         self.np_random, self.seed = seeding.np_random(seed)
         return [self.seed]
-    
+
     def get_seed(self):
         return self.seed
 
@@ -184,6 +176,9 @@ class TwoDPlaneEnv(gym.Env):
         self.target = np.hstack([pos, vel])
 
     def step(self, action):
+        # check if action is a tensor and convert to numpy array
+        if hasattr(action, "numpy"):
+            action = action.cpu().numpy()
         assert self.action_space.contains(action), "%r (%s) invalid" % (
             action,
             type(action),

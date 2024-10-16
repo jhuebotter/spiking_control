@@ -62,19 +62,6 @@ def make_transition_model(
     if params["activation"] is None:
         params.pop("activation")
 
-    for k, v in config.params.items():
-        print(k, v)
-        if k in params:
-            print("value in params", params[k])
-        else:    
-            print("value not in params")
-        print()
-
-    print(params)
-    print()
-    #print(config.params)
-    exit()
-
     transitionnet = model(
         action_dim=action_dim,
         state_dim=state_dim,

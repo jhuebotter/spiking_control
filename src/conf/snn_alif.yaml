@@ -69,7 +69,7 @@ model:
 optimizer: ${optimizer}
 
 learning:
-  batches_per_iteration: 25
+  batches_per_iteration: 2
   params:
     batch_size: 512
     max_norm: 30

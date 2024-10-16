@@ -16,7 +16,7 @@ class Transition:
 
     def __getitem__(self, key: str) -> Tensor:
         if key in ['reward', 'done']:
-            return torch.tensor(self.reward)
+            return torch.tensor(getattr(self, key))
         return getattr(self, key).clone().detach()
 
     def as_dict(self) -> dict[str, Tensor]:
@@ -24,8 +24,8 @@ class Transition:
             'state': self.state,
             'target': self.target,
             'action': self.action,
-            'reward': torch.tensor(self.reward),
-            'done': torch.tensor(self.done),
+            'reward': self.reward,
+            'done': self.done,
             'next_state': self.next_state
         }
 

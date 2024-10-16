@@ -1,5 +1,6 @@
 import gymnasium as gym
 from gymnasium.vector import SyncVectorEnv
+from gymnasium.wrappers import RecordVideo
 from ..extratypes import *
 
 
@@ -31,11 +32,17 @@ def make_env(config: dict, seed: int = 0, eval: bool = False) -> gym.Env:
         print('loading simple 2d plane task')
         from src.envs import TwoDPlaneEnvSimple
         env_fn = lambda: TwoDPlaneEnvSimple(eval=eval, **config['params'])
+    elif task == 'franka':
+        print('loading franka task')
+        from src.envs.isaac_franka import FrankaEnv
+        env_fn = lambda: FrankaEnv(eval=eval, num_envs=config['num_envs'], **config['params'])
+        env = env_fn()
     else:
         raise NotImplementedError(f'the task {task} is not implemented')
 
     # wrap the environment
-    env = wrap_env(env_fn, config, eval, seed=seed)
+    if task.lower() in ['reacher', 'reacher_simple', 'plane', 'plane_simple']:
+        env = wrap_env(env_fn, config, eval, seed=seed)
 
     return env
 

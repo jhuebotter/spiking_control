@@ -171,6 +171,9 @@ class ReacherEnv(gym.Env):
         self.target = np.hstack([angles, vel])
 
     def step(self, action):
+        # check if action is a tensor and convert to numpy array
+        if hasattr(action, "numpy"):
+            action = action.cpu().numpy()
         assert self.action_space.contains(action), "%r (%s) invalid" % (
             action,
             type(action),
