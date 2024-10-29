@@ -117,6 +117,8 @@ class TwoDPlaneEnv(gym.Env):
         self.target = None
         self.target_angle = 0.0
 
+        self.manual_video = True
+
     def set_seed(self, seed=None):
         self.np_random, self.seed = seeding.np_random(seed)
         return [self.seed]

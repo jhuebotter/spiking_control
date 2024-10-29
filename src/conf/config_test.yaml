@@ -21,8 +21,8 @@ model:
   connection:
     n_dims: 64
   hidden_dim: 
+    - 2048
     - 1024
-    - 512
   initializer:
     sigma_u: 1.0
     nu: 10
@@ -63,7 +63,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
-  total_steps: 1_280_000
+  total_steps: 384_000
 
 hydra:
   run:

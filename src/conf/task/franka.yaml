@@ -1,5 +1,5 @@
 type: franka
-num_envs: 16
+num_envs: 32
 num_eval_envs: 0
 params:
   max_episode_steps: 200
@@ -7,4 +7,4 @@ params:
   dt: 0.02
   render_interval: 1
   active_joints: [0, 1, 2]
-  control: position
+  control: velocity

@@ -35,6 +35,7 @@ def change_joint_properties(
     damping: Optional[float] = None,
     friction: Optional[float] = None,
     armature: Optional[float] = None,
+    fixed_indices: Sequence = [],
     verbose: bool = False,
 ) -> None:
     """Change the joint properties of the actuator group in the articulation.
@@ -45,6 +46,7 @@ def change_joint_properties(
     - damping: new damping value
     - friction: new friction value
     - armature: new armature value
+    - fixed_indices: list of fixed joint indices
     - verbose: print joint properties before and after change
 
     returns: None
@@ -54,8 +56,15 @@ def change_joint_properties(
     current_damping = articulation.actuators[act].damping
     current_friction = articulation.actuators[act].friction
     current_armature = articulation.actuators[act].armature
+    joint_indices = articulation.actuators[act].joint_indices
+    overwrite_indices = torch.tensor([i in fixed_indices for i in joint_indices])
+    fixed_val = 1e8
+
     if verbose:
         print(f"[INFO]: changing joint properties for actuator group {act}...")
+        print(
+            f"[INFO]: fixed indices: {fixed_indices}, overwrite indices: {overwrite_indices}"
+        )
         print("joint properties before change:")
         print("stiffness: ", current_stiffness)
         print("damping: ", current_damping)
@@ -67,6 +76,7 @@ def change_joint_properties(
             torch.ones_like(current_stiffness, device=current_stiffness.device)
             * stiffness
         )
+        new_stiffness_tensor[:, overwrite_indices] = fixed_val
         articulation.actuators[act].stiffness = new_stiffness_tensor
         articulation.write_joint_stiffness_to_sim(
             stiffness=new_stiffness_tensor,
@@ -76,6 +86,7 @@ def change_joint_properties(
         new_damping_tensor = (
             torch.ones_like(current_damping, device=current_damping.device) * damping
         )
+        new_damping_tensor[:, overwrite_indices] = fixed_val
         articulation.actuators[act].damping = new_damping_tensor
         articulation.write_joint_damping_to_sim(
             damping=new_damping_tensor,
@@ -85,6 +96,7 @@ def change_joint_properties(
         new_friction_tensor = (
             torch.ones_like(current_friction, device=current_friction.device) * friction
         )
+        new_friction_tensor[:, overwrite_indices] = fixed_val
         articulation.actuators[act].friction = new_friction_tensor
         articulation.write_joint_friction_to_sim(
             joint_friction=new_friction_tensor,
@@ -94,6 +106,7 @@ def change_joint_properties(
         new_armature_tensor = (
             torch.ones_like(current_armature, device=current_armature.device) * armature
         )
+        new_armature_tensor[:, overwrite_indices] = fixed_val
         articulation.actuators[act].armature = new_armature_tensor
         articulation.write_joint_armature_to_sim(
             armature=new_armature_tensor,
@@ -146,6 +159,16 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
         num_envs=512, env_spacing=3.0, replicate_physics=True
     )
 
+    # table
+    table: RigidObjectCfg = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/table",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/Stand/stand_instanceable.usd",
+            scale=(2.0, 2.0, 2.0),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 0.0, 0.8)),
+    )
+
     # robot
     robot: ArticulationCfg = ArticulationCfg(
         prim_path="/World/envs/env_.*/Robot",
@@ -173,7 +196,7 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
                 "panda_joint7": 0.0,
                 "panda_finger_joint.*": 0.0,
             },
-            pos=(0.0, 0.0, 0.0),
+            pos=(0.0, 0.0, 0.8),
             rot=(0.0, 0.0, 0.0, 1.0),
         ),
         actuators={
@@ -318,9 +341,14 @@ class FrankaReachCustomEnv(DirectRLEnv):
             self.cfg.active_joints_idx, device=self.device
         )
 
+        # allow for testing mode with fixed target positions
+        self.test_mode = False
+        self.test_target_pos = self.target_pos.clone()
+
         self.post_init()
 
     def _setup_scene(self):
+        self.table = RigidObject(self.cfg.table)
         self.robot = Articulation(self.cfg.robot)
         self.target = RigidObject(self.cfg.target)
         # add ground plane
@@ -336,6 +364,11 @@ class FrankaReachCustomEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def post_init(self):
+
+        # fix the inactive joints
+        inactive_joints_indices = [
+            i for i in range(self.robot.num_joints) if i not in self.active_joints_idx
+        ]
 
         # change joint properties
         # TODO: have these values come from the config file
@@ -360,6 +393,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
                 damping=damping,
                 friction=1.0,
                 armature=0.01,
+                fixed_indices=inactive_joints_indices,
             )
 
         # get the robot effort limits
@@ -367,6 +401,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
             joint_idx = act.joint_indices
             self.robot_dof_effort_limits[joint_idx] = act.effort_limit[0]
         print(f"[INFO]: robot dof effort limits: {self.robot_dof_effort_limits}")
+
+        # set the target position
+        self.make_test_targets()
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
 
@@ -472,7 +509,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
         }
 
     def _get_rewards(self) -> torch.Tensor:
-        return -self.distance_ee_target
+        return -self.distance_ee_target * self.step_dt
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         self._compute_intermediate_values()
@@ -495,12 +532,39 @@ class FrankaReachCustomEnv(DirectRLEnv):
             return target_reached
         return torch.zeros_like(target_reached, dtype=torch.bool)
 
+    def make_test_targets(self):
+        env_ids = self.robot._ALL_INDICES
+
+        current_rng_state = torch.random.get_rng_state()
+        torch.random.manual_seed(0)
+        # get random valid robot joint positions
+        self.reset_joints_by_sampling_in_limits(env_ids)
+        # set target pos to end effector pos
+        self.set_target_pos_to_ee_pos(env_ids)
+        self.test_target_pos = self.target_pos.clone()
+        torch.random.set_rng_state(current_rng_state)
+
+    def set_test_mode(self, test_mode: bool) -> None:
+        self.test_mode = test_mode
+
     def _reset_idx(self, env_ids: Sequence[int] | None) -> None:
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         super()._reset_idx(env_ids)
 
         self.last_observation = self._get_observations()
+
+        if self.test_mode:
+            # reuse the test target positions and reset the joints to the default positions
+            self.target_pos[env_ids] = self.test_target_pos[env_ids]
+            self.reset_joints_to_default_pos(env_ids)
+        else:
+            # get random valid robot joint positions
+            self.reset_joints_by_sampling_in_limits(env_ids)
+            # set target pos to end effector pos
+            self.set_target_pos_to_ee_pos(env_ids)
+            # get new actual robot joint positions
+            self.reset_joints_by_sampling_in_limits(env_ids)
 
         # get random valid robot joint positions
         self.reset_joints_by_sampling_in_limits(env_ids)
@@ -513,6 +577,42 @@ class FrankaReachCustomEnv(DirectRLEnv):
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
         self._compute_intermediate_values(env_ids)
+
+    def reset_joints_to_default_pos(self, env_ids: torch.Tensor):
+        """Reset the robot joints to the default joint positions and set the velocity to zero."""
+
+        # set joint pos to default values
+        new_joint_pos = self.robot.data.default_joint_pos[env_ids].clone()
+        new_joint_vel = torch.zeros_like(new_joint_pos, device=new_joint_pos.device)
+
+        # set into the physics simulation
+        self.robot.write_joint_state_to_sim(
+            new_joint_pos, new_joint_vel, env_ids=env_ids
+        )
+        self.robot.set_joint_position_target(new_joint_pos, env_ids=env_ids)
+        self.robot.set_joint_velocity_target(new_joint_vel, env_ids=env_ids)
+        self.robot.write_data_to_sim()
+
+        # ! IMPORTANT: running the sim for a very small time step to update robot.data.body_pos_w
+        # quite hacky but it works... for now
+        self.robot.update(1e-10)
+        self.sim._physics_context._physx_sim_interface.simulate(
+            1e-10, self.sim._current_time
+        )
+        self.sim._physics_context._physx_sim_interface.fetch_results()
+
+        # update local variables
+        self.robot_joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
+        self.robot_joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
+        self.robot_dof_pos_targets[env_ids] = self.robot_joint_pos[env_ids]
+        self.robot_dof_vel_targets[env_ids] = self.robot_joint_vel[env_ids]
+        # update end effector position
+        env_pos = self.robot.data.body_pos_w[env_ids, 0]
+        left_finger_pos = self.robot.data.body_pos_w[env_ids, -2]
+        right_finger_pos = self.robot.data.body_pos_w[env_ids, -1]
+        self.robot_ee_pos[env_ids] = (
+            0.5 * (left_finger_pos + right_finger_pos) - env_pos
+        )
 
     def reset_joints_by_sampling_in_limits(
         self,
@@ -647,6 +747,9 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
         self.render_mode = render_mode
         self.fully_observable = True  # pixel observations not supported at the moment
         self.num_envs = num_envs
+        self.active_joints = active_joints
+        self.report_only_active_joints = True
+        self.report_velocity = False
 
         env_cfg = FrankaReachCustomEnvCfg()
         env_cfg.scene.num_envs = num_envs
@@ -662,11 +765,17 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
         )
         self.action_space = self._env.action_space
 
-        obs_limits = np.tile(np.array([1.0] * 14 + [np.inf] * 3), (num_envs, 1))
+        n_joint_obs = len(self.active_joints) if self.report_only_active_joints else 7
+        n_joint_obs *= 2 if self.report_velocity else 1
+        obs_limits = np.tile(
+            np.array([1.0] * n_joint_obs + [np.inf] * 3), (num_envs, 1)
+        )
         self.observation_space = spaces.Dict(
             {
                 "proprio": spaces.Box(
-                    low=-1.0 * obs_limits, high=obs_limits, shape=(num_envs, 17)
+                    low=-1.0 * obs_limits,
+                    high=obs_limits,
+                    shape=(num_envs, n_joint_obs + 3),
                 ),
                 "target": spaces.Box(
                     low=np.tile(np.array([-np.inf] * 3), (num_envs, 1)),
@@ -676,25 +785,21 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
             }
         )
 
-        self.state_labels = [
-            "joint 1 pos",
-            "joint 2 pos",
-            "joint 3 pos",
-            "joint 4 pos",
-            "joint 5 pos",
-            "joint 6 pos",
-            "joint 7 pos",
-            "joint 1 vel",
-            "joint 2 vel",
-            "joint 3 vel",
-            "joint 4 vel",
-            "joint 5 vel",
-            "joint 6 vel",
-            "joint 7 vel",
-            "hand x",
-            "hand y",
-            "hand z",
-        ]
+        if self.report_only_active_joints:
+            self.state_labels = [f"joint {i+1} pos" for i in active_joints]
+            obs_indices = [i for i in active_joints]
+            if self.report_velocity:
+                self.state_labels += [f"joint {i+1} vel" for i in active_joints]
+                obs_indices += [i + 7 for i in active_joints]
+        else:
+            self.state_labels = [f"joint {i+1} pos" for i in range(7)]
+            obs_indices = [i for i in range(7)]
+            if self.report_velocity:
+                self.state_labels += [f"joint {i+1} vel" for i in range(7)]
+                obs_indices += [i + 7 for i in range(7)]
+        self.state_labels += ["hand x", "hand y", "hand z"]
+        obs_indices += [14, 15, 16]
+        self.obs_indices = torch.tensor(obs_indices)
 
         self.target_labels = [
             "hand x",
@@ -718,7 +823,7 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
         if "_final_observation" in extras.keys():
             extras["final_observation"] = [
                 {
-                    "proprio": obs["policy"][:-3],
+                    "proprio": obs["policy"][self.obs_indices],
                     "target": obs["policy"][-3:],
                 }
                 for obs in extras["final_observation"]
@@ -727,7 +832,7 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
 
     def redo_obs(self, obs: dict):
         observations = {
-            "proprio": obs["policy"][:, :-3],
+            "proprio": obs["policy"][:, self.obs_indices],
             "target": obs["policy"][:, -3:],
         }
         return observations
@@ -738,13 +843,22 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
             action = torch.tensor(action, dtype=torch.float32)
         obs, reward, terminated, truncated, extras = self._env.step(action)
 
-        return self.redo_obs(obs), reward, terminated, truncated, self.redo_extras(extras)
+        return (
+            self.redo_obs(obs),
+            reward,
+            terminated,
+            truncated,
+            self.redo_extras(extras),
+        )
 
     def render(self, mode="rgb_array"):
         return self._env.render(mode)
 
     def close(self):
         self._env.close()
+
+    def set_test_mode(self, test_mode: bool):
+        self._env.set_test_mode(test_mode)
 
     def seed(self, seed=None):
         self._env.seed(seed)

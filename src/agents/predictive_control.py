@@ -99,7 +99,10 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # wrap the environment with a video recorder if needed
-        self.manual_video = hasattr(self.env, "manual_video") and self.env.manual_video
+        if hasattr(self.env, "manual_video"):
+            self.manual_video = self.env.manual_video
+        else:
+            self.manual_video = True
         if not self.manual_video:
             trigger = lambda x: False
             self.env = gym.wrappers.RecordVideo(
@@ -141,6 +144,11 @@ class PredictiveControlAgent(BaseAgent):
         if reset_memory:
             self.memory.reset()
 
+        set_test_mode_fn = getattr(env, "set_test_mode", None)
+        if callable(set_test_mode_fn):
+            print("setting test mode to False")
+            set_test_mode_fn(False)
+
         num_envs = self.env.num_envs
 
         episodes = [Episode() for _ in range(num_envs)]
@@ -178,8 +186,8 @@ class PredictiveControlAgent(BaseAgent):
                 actions = actions.squeeze(0).clamp(action_min, action_max).detach()
 
                 # step the environment
-                observations, rewards, terminates, truncateds, infos = (
-                    self.env.step(actions)
+                observations, rewards, terminates, truncateds, infos = self.env.step(
+                    actions
                 )
 
                 dones = [
@@ -343,6 +351,11 @@ class PredictiveControlAgent(BaseAgent):
 
         if env is None:
             env = self.env if self.eval_env is None else self.eval_env
+
+        set_test_mode_fn = getattr(env, "set_test_mode", None)
+        if callable(set_test_mode_fn):
+            print("setting test mode to True")
+            set_test_mode_fn(True)
 
         num_envs = env.num_envs
 
