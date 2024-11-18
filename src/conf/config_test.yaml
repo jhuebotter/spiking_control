@@ -13,8 +13,8 @@ device: cuda
 model:
   time:
     dt: 0.002
-    tau_mem: 0.02
-    tau_syn: 0.01
+    tau_mem: 0.05
+    tau_syn: 0.005
   activation:
     type: sigmoidspike
     beta: 25
@@ -29,14 +29,14 @@ model:
     bias_scale: 1.0
     scaling: 1.0
   input:
-    scaling: 0.1
+    scaling: 1.0
   output:
     activation_steepness: 1.0
 
 optimizer:
   type: smorms3
   params:
-    lr: 0.0005
+    lr: 0.0002
 
 LowerBoundL2:
   strength: 0.0
@@ -63,7 +63,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
-  total_steps: 384_000
+  total_steps: 960_000
 
 hydra:
   run:

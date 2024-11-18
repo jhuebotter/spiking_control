@@ -2,9 +2,10 @@ type: franka
 num_envs: 32
 num_eval_envs: 0
 params:
-  max_episode_steps: 200
+  max_episode_steps: 300
   render_mode: rgb_array
   dt: 0.02
   render_interval: 1
-  active_joints: [0, 1, 2]
+  dof: 3
+  # active_joints: [0, 1, 2, 3, 4, 5]
   control: velocity

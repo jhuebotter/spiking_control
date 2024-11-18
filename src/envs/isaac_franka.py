@@ -732,7 +732,8 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
         eval: bool = False,
         num_envs: int = 1,
         render_interval: int = 1,
-        active_joints: list[int] = [0, 1, 2, 3, 4, 5],
+        dof: int = 6,
+        # active_joints: list[int] = [0, 1, 2, 3, 4, 5],
         control: str = "position",
         **kwargs,
     ) -> None:
@@ -747,6 +748,8 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
         self.render_mode = render_mode
         self.fully_observable = True  # pixel observations not supported at the moment
         self.num_envs = num_envs
+        assert 0 < dof <= 7
+        active_joints = [i for i in range(dof)]
         self.active_joints = active_joints
         self.report_only_active_joints = True
         self.report_velocity = False

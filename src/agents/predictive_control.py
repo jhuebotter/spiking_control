@@ -144,7 +144,7 @@ class PredictiveControlAgent(BaseAgent):
         if reset_memory:
             self.memory.reset()
 
-        set_test_mode_fn = getattr(env, "set_test_mode", None)
+        set_test_mode_fn = getattr(self.env, "set_test_mode", None)
         if callable(set_test_mode_fn):
             print("setting test mode to False")
             set_test_mode_fn(False)
