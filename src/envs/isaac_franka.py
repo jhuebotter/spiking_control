@@ -318,6 +318,11 @@ class FrankaReachCustomEnv(DirectRLEnv):
         )  # target position
         self.distance_ee_target = torch.zeros(self.num_envs, device=self.device)
         self.runtime = torch.zeros(self.num_envs, device=self.device)
+        self.max_episode_steps = self.cfg.episode_length_s / self.step_dt
+        self.steps_to_target = (
+            torch.ones_like(self.runtime, device=self.device) * self.max_episode_steps
+        )
+        self.success = torch.zeros_like(self.runtime, device=self.device)
         self.extras = {
             "runtime": self.runtime,
         }
@@ -463,6 +468,8 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.runtime += self.step_dt
         self.extras = {
             "runtime": self.runtime,
+            "steps_to_target": self.steps_to_target,
+            "success": self.success,
         }
 
     def _apply_action(self) -> None:
@@ -521,12 +528,24 @@ class FrankaReachCustomEnv(DirectRLEnv):
             self.extras["final_observation"] = [
                 {"policy": obs} for obs in self._get_observations()["policy"]
             ]
+            self.extras["final_reward"] = self._get_rewards()
+            self.extras["final_info"] = [
+                {
+                    ###! add time to target and steps to target and sum of distance to target here
+                }
+            ]
         return terminated, truncated
 
     def check_termination(self) -> torch.Tensor:
 
         # check if the end effector is within a certain distance of the target
         target_reached = self.distance_ee_target < self.cfg.target_reach_threshold
+
+        success_old = self.success.clone()
+        self.success[target_reached] = 1.0
+        # update the steps to target only if the target is reached for the first time
+        changed = (success_old == 0.0) & (self.success == 1.0)
+        self.steps_to_target[changed] = self.runtime[target_reached] / self.step_dt
 
         if self.terminate_on_target:
             return target_reached
@@ -574,6 +593,8 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.reset_joints_by_sampling_in_limits(env_ids)
         # reset the runtime
         self.runtime[env_ids] = 0.0
+        self.steps_to_target[env_ids] = self.max_episode_steps
+        self.success[env_ids] = 0.0
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
         self._compute_intermediate_values(env_ids)
@@ -831,6 +852,10 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
                 }
                 for obs in extras["final_observation"]
             ]
+
+            ###! CHECK IF THE FINAL INFOS ARE CORRECT !!!
+            # this should include "cumulative distance", "success", and "steps to target", "steps on target"
+
         return extras
 
     def redo_obs(self, obs: dict):

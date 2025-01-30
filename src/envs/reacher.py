@@ -80,8 +80,8 @@ class ReacherEnv(gym.Env):
                         low=np.array([-1.0] * 8), high=np.array([1.0] * 8)
                     ),
                     "target": spaces.Box(
-                        low=np.array([-1.0] * self.target_dim), 
-                        high=np.array([1.0] * self.target_dim)
+                        low=np.array([-1.0] * self.target_dim),
+                        high=np.array([1.0] * self.target_dim),
                     ),
                 }
             )
@@ -109,10 +109,7 @@ class ReacherEnv(gym.Env):
             "hand y",
         ]
 
-        self.loss_gain = {
-            'gain': np.array([1.0, 1.0]),
-            'use': np.array([0, 1])
-        }
+        self.loss_gain = {"gain": np.array([1.0, 1.0]), "use": np.array([0, 1])}
 
         self.set_seed(seed)
         self.screen = None
@@ -124,14 +121,13 @@ class ReacherEnv(gym.Env):
 
         self.manual_video = True
 
-
     def set_seed(self, seed=None):
         self.np_random, self.seed = seeding.np_random(seed)
         return [self.seed]
-    
+
     def get_seed(self):
         return self.seed
-    
+
     def get_loss_gain(self):
         return self.loss_gain
 
@@ -188,26 +184,13 @@ class ReacherEnv(gym.Env):
         self.stepTarget()
         self.episode_step_count += 1
 
-        # check if episode is done
-        terminated = False
-        truncated = False
-        on_target = False
-        if np.allclose(self.state[:2], self.target[:2], atol=self.epsilon):
-            on_target = True
-            if self.done_on_target:
-                terminated = True
-        max_steps = False
-        if self.max_episode_steps and self.episode_step_count == self.max_episode_steps:
-            truncated = True
-            max_steps = True
-
         # make observation
         target_observation = self.make_observation(self.target, noise=False)
         if self.fully_observable:
             proprio_observation = self.make_observation(self.state)
             observation = {
                 "proprio": proprio_observation,
-                "target": target_observation[:self.target_dim],
+                "target": target_observation[: self.target_dim],
             }
         else:
             observation = self.render(mode="rgb_array")
@@ -216,11 +199,36 @@ class ReacherEnv(gym.Env):
         ob_rew = self.make_observation(self.state, noise=False)
         reward = -np.linalg.norm(ob_rew[:2] - target_observation[:2]) * self.dt
 
+        # check if episode is done
+        terminated = False
+        truncated = False
+        on_target = False
+        if np.allclose(ob_rew[:2], target_observation[:2], atol=self.epsilon):
+            on_target = True
+            self.steps_on_target += 1
+            if self.steps_to_target == self.max_episode_steps:
+                self.steps_to_target = self.episode_step_count
+            self.was_on_target = True
+            if self.done_on_target:
+                terminated = True
+        max_steps = False
+        if self.max_episode_steps and self.episode_step_count == self.max_episode_steps:
+            truncated = True
+            max_steps = True
+
+        # calculate euclidean distance to target ee position
+        dist = np.linalg.norm(ob_rew[:2] - target_observation[:2])
+        self.cumulative_distance += dist * self.dt
+
         # additional info
         info = {
             "on_target": on_target,
+            "success": self.was_on_target,
+            "steps_to_target": self.steps_to_target,
+            "steps_on_target": self.steps_on_target,
             "max_steps": max_steps,
             "step": self.episode_step_count,
+            "cumulative_distance": self.cumulative_distance,
         }
 
         return observation, reward, terminated, truncated, info
@@ -258,6 +266,8 @@ class ReacherEnv(gym.Env):
 
     def reset(self, seed=None, options={}):
         self.episode_step_count = 0
+        self.steps_on_target = 0
+        self.cumulative_distance = 0.0
 
         state = options.get("state", None)
         target = options.get("target", None)
@@ -302,17 +312,28 @@ class ReacherEnv(gym.Env):
         # make observation
         proprio_observation = self.make_observation(self.state)
         target_observation = self.make_observation(self.target, noise=False)
-        observation = {"proprio": proprio_observation, "target": target_observation[:self.target_dim]}
+        observation = {
+            "proprio": proprio_observation,
+            "target": target_observation[: self.target_dim],
+        }
 
         # additional info
         on_target = False
-        if np.allclose(self.state[:2], self.target[:2], atol=self.epsilon):
+        ob_rew = self.make_observation(self.state, noise=False)
+        if np.allclose(ob_rew[:2], target_observation[:2], atol=self.epsilon):
             on_target = True
+        self.was_on_target = on_target
+        self.steps_to_target = self.max_episode_steps if not on_target else 0
         max_steps = False
+
         info = {
             "on_target": on_target,
+            "success": self.was_on_target,
+            "steps_to_target": self.steps_to_target,
+            "steps_on_target": self.steps_on_target,
             "max_steps": max_steps,
             "step": self.episode_step_count,
+            "cumulative_distance": self.cumulative_distance,
         }
 
         return observation, info
@@ -449,11 +470,7 @@ class ReacherEnvSimple(ReacherEnv):
 
 if __name__ == "__main__":
 
-    env = ReacherEnv(
-        seed=4, 
-        show_target_arm=True, 
-        fully_observable=False
-    )
+    env = ReacherEnv(seed=4, show_target_arm=True, fully_observable=False)
     target = np.array([0.75, 0.75, 0.2, 0.2])
     target[:2] *= 2 * np.pi
     target[2:] *= env.max_vel

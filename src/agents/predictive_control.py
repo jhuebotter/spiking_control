@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 from typing import Optional
 from pathlib import Path
+from copy import deepcopy
 from src.plotting import render_video, animate_predictions
 
 
@@ -120,6 +121,12 @@ class PredictiveControlAgent(BaseAgent):
         self.policy_updates = 0
         self.transition_updates = 0
 
+        # initialize early stopping
+        self.early_stop_metric = self.run_config.get("early_stop_metric", None)
+        self.early_stop_mode = self.run_config.get("early_stop_mode", "min").lower()
+        self.early_stop_patience = self.run_config.get("early_stop_patience", 0)
+        self.early_stop_metric_list = []
+
     def run(self, total_steps: int):
 
         if self.eval_first:
@@ -130,11 +137,53 @@ class PredictiveControlAgent(BaseAgent):
             render = (
                 (self.iterations + 1) % self.plotting_config.get("render_every", 1)
             ) == 0
-            self.test(steps=self.steps_per_evaluation, render=render)
+            test_results = self.test(
+                steps=self.steps_per_evaluation,
+                render=render,
+                return_results=[self.early_stop_metric],
+            )
             self.save_models()
             self.iterations += 1
+            if self.check_early_stop(test_results):
+                break
 
         self.finish_run()
+
+    def check_early_stop(self, test_results):
+
+        patience = self.early_stop_patience
+        metric = self.early_stop_metric
+        mode = self.early_stop_mode
+        assert mode in ["min", "max"], "early stopping mode must be 'min' or 'max'"
+
+        if patience > 0 and metric is not None:
+            print(
+                f"Iteration {self.iterations}: Checking early stopping with patience {patience} in mode {mode} for metric {metric}"
+            )
+            if metric in test_results.keys():
+                print("current value: ", test_results[metric])
+                self.early_stop_metric_list.append(test_results[metric])
+                if mode == "min":
+                    best = min(self.early_stop_metric_list)
+                elif mode == "max":
+                    best = max(self.early_stop_metric_list)
+                print(
+                    "best value: ",
+                    best,
+                    "in iteration: ",
+                    self.early_stop_metric_list.index(best),
+                )
+                # check if the best value has not been improved for patience iterations
+                last_values = self.early_stop_metric_list[-patience:]
+                if best not in last_values:
+                    print(
+                        f"Early stopping triggered after {self.iterations} iterations"
+                    )
+                    return True
+            else:
+                print(f"metric {metric} not found in test results")
+                return False
+        return False
 
     @torch.no_grad()
     def collect_rollouts(self, steps: int, reset_memory: bool = True):
@@ -175,6 +224,10 @@ class PredictiveControlAgent(BaseAgent):
         step = 0
         total_reward = 0
         completed_episodes = 0
+        success_tracker = []
+        steps_to_target_tracker = []
+        steps_on_target_tracker = []
+        cumulative_distance_tracker = []
         with tqdm(
             total=steps,
             desc=f"{'obtaining experience':30}",
@@ -220,6 +273,18 @@ class PredictiveControlAgent(BaseAgent):
                                     dtype=torch.float32,
                                 )
 
+                            # TODO: build some failsafe for when the info dict is not complete
+                            final_info = infos["final_info"][i]
+                            success = final_info["success"]
+                            success_tracker.append(1 if success else 0)
+                            steps_to_target = final_info["steps_to_target"]
+                            steps_to_target_tracker.append(steps_to_target)
+                            steps_on_target = final_info["steps_on_target"]
+                            steps_on_target_tracker.append(steps_on_target)
+                            cumulative_distance_tracker.append(
+                                final_info["cumulative_distance"]
+                            )
+
                 # store the transition
                 for i, (o, t, a, r, d, no) in enumerate(
                     zip(obs, targets, actions, rewards, dones, next_obs)
@@ -228,7 +293,7 @@ class PredictiveControlAgent(BaseAgent):
                     if d:
                         # ! This only adds complete episodes to the memory
                         self.memory.append(episodes[i])
-                        total_reward += episodes[i].get_cummulative_reward()
+                        total_reward += episodes[i].get_cumulative_reward()
                         episodes[i] = Episode()
                         completed_episodes += 1
                         self.episodes += 1
@@ -254,8 +319,32 @@ class PredictiveControlAgent(BaseAgent):
 
         self.steps += step
         average_reward = total_reward / completed_episodes
+        if len(success_tracker) > 0:
+            average_success_rate = sum(success_tracker) / len(success_tracker)
+        else:
+            average_success_rate = None
+        if len(steps_to_target_tracker) > 0:
+            average_steps_to_target = sum(steps_to_target_tracker) / len(
+                steps_to_target_tracker
+            )
+        else:
+            average_steps_to_target = None
+        if len(cumulative_distance_tracker) > 0:
+            average_cumulative_distance = sum(cumulative_distance_tracker) / len(
+                cumulative_distance_tracker
+            )
+        else:
+            average_cumulative_distance = None
+        if len(steps_on_target_tracker) > 0:
+            average_steps_on_target = sum(steps_on_target_tracker) / len(
+                steps_on_target_tracker
+            )
         results = {
             "train average reward": average_reward,
+            "train average success rate": average_success_rate,
+            "train average steps to target": average_steps_to_target,
+            "train average steps on target": average_steps_on_target,
+            "train average cumulative distance": average_cumulative_distance,
         }
 
         self.log(results, step=self.epochs)
@@ -347,6 +436,7 @@ class PredictiveControlAgent(BaseAgent):
         steps: int,
         env: Optional[gym.vector.VectorEnv] = None,
         render: bool = False,
+        return_results: list = [],
     ):
 
         if env is None:
@@ -376,6 +466,11 @@ class PredictiveControlAgent(BaseAgent):
 
         completed_episodes = []
         episodes = [Episode() for _ in range(num_envs)]
+
+        success_tracker = []
+        steps_to_target_tracker = []
+        steps_on_target_tracker = []
+        cumulative_distance_tracker = []
 
         if render:
             # check if the environment is wrapped with RecordVideo
@@ -450,6 +545,18 @@ class PredictiveControlAgent(BaseAgent):
                                         dtype=torch.float32,
                                     )
 
+                                # TODO: build some failsafe for when the info dict is not complete
+                                final_info = infos["final_info"][i]
+                                success = final_info["success"]
+                                success_tracker.append(1 if success else 0)
+                                steps_to_target = final_info["steps_to_target"]
+                                steps_to_target_tracker.append(steps_to_target)
+                                steps_on_target = final_info["steps_on_target"]
+                                steps_on_target_tracker.append(steps_on_target)
+                                cumulative_distance_tracker.append(
+                                    final_info["cumulative_distance"]
+                                )
+
                     # store the transition
                     for i, (o, t, a, r, d, no) in enumerate(
                         zip(obs, targets, actions, rewards, dones, next_obs)
@@ -457,7 +564,7 @@ class PredictiveControlAgent(BaseAgent):
                         episodes[i].append(Transition(o, t, a, r, d, no))
                         if d:
                             completed_episodes.append(episodes[i])
-                            total_reward += episodes[i].get_cummulative_reward()
+                            total_reward += episodes[i].get_cumulative_reward()
                             episodes[i] = Episode()
 
                     # store frames for rendering
@@ -493,8 +600,32 @@ class PredictiveControlAgent(BaseAgent):
 
         # log the results
         average_reward = total_reward / len(completed_episodes)
+        if len(success_tracker) > 0:
+            average_success_rate = sum(success_tracker) / len(success_tracker)
+        else:
+            average_success_rate = None
+        if len(steps_to_target_tracker) > 0:
+            average_steps_to_target = sum(steps_to_target_tracker) / len(
+                steps_to_target_tracker
+            )
+        else:
+            average_steps_to_target = None
+        if len(cumulative_distance_tracker) > 0:
+            average_cumulative_distance = sum(cumulative_distance_tracker) / len(
+                cumulative_distance_tracker
+            )
+        else:
+            average_cumulative_distance = None
+        if len(steps_on_target_tracker) > 0:
+            average_steps_on_target = sum(steps_on_target_tracker) / len(
+                steps_on_target_tracker
+            )
         results = {
             "test average reward": average_reward,
+            "test average success rate": average_success_rate,
+            "test average steps to target": average_steps_to_target,
+            "test average steps on target": average_steps_on_target,
+            "test average cumulative distance": average_cumulative_distance,
         }
 
         # make the video
@@ -531,8 +662,10 @@ class PredictiveControlAgent(BaseAgent):
             unroll=self.run_config.get("prediction_unroll", 1),
         )
         results.update(prediction_results)
-
+        return_dict = {k: deepcopy(results[k]) for k in return_results}
         self.log(results, step=self.epochs)
+
+        return return_dict
 
     def save_models(self):
 

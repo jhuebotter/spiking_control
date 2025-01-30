@@ -3,6 +3,6 @@ memory:
   params:
     max_size: 2048
 
-steps_per_iteration: 9600
-steps_per_evaluation: 9600
+steps_per_iteration: 5000
+steps_per_evaluation: 1600
 reset_memory: false

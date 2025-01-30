@@ -13,7 +13,7 @@ from control_stork.initializers import (
 from control_stork.connections import Connection
 from . import BaseRSNN
 from src.memory import EpisodeMemory
-from src.utils import get_grad_norm
+from src.utils import get_total_grad_norm, get_grad_norms
 from src.extratypes import *
 
 
@@ -37,7 +37,9 @@ class TransitionNetRSNN(BaseRSNN):
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
-        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(nu=200, sigma_u=1.0, time_step=1e-3),
+        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(
+            nu=200, sigma_u=1.0, time_step=1e-3
+        ),
         regularizers: list = [],
         w_regularizers: list = [],
         activation_steepness: float = 1.0,
@@ -46,7 +48,7 @@ class TransitionNetRSNN(BaseRSNN):
         device=None,
         **kwargs,
     ) -> None:
-        
+
         self.action_dim = action_dim
         self.state_dim = state_dim
 
@@ -83,16 +85,16 @@ class TransitionNetRSNN(BaseRSNN):
         return torch.nn.functional.mse_loss(y_hat, y)
 
     def train_fn(
-            self,
-            memory: EpisodeMemory,
-            batch_size: int = 128,
-            warmup_steps: int = 5,
-            unroll_steps: int = 1,
-            autoregressive: bool = False,
-            max_norm: Optional[float] = None,
-            record: bool = False,
-            excluded_monitor_keys: Optional[list[str]] = None,
-        ) -> dict:
+        self,
+        memory: EpisodeMemory,
+        batch_size: int = 128,
+        warmup_steps: int = 5,
+        unroll_steps: int = 1,
+        autoregressive: float = 0.0,
+        max_norm: Optional[float] = None,
+        record: bool = False,
+        excluded_monitor_keys: Optional[list[str]] = None,
+    ) -> dict:
 
         # sample a batch of transitions
         (
@@ -129,10 +131,11 @@ class TransitionNetRSNN(BaseRSNN):
             next_state_delta_hat = self.predict(state, action, record=record)
             next_state_hat = state + next_state_delta_hat
             prediction_loss += self.criterion(next_state_hat.squeeze(0), next_state)
-            if autoregressive:
-                state = next_state_hat
-            else:
-                state = next_state
+            
+            state = next_state  # teacher forcing
+            if autoregressive > 0.0:
+                if torch.rand(1).item() < autoregressive:
+                    state = next_state_hat   # autoregressive
 
         # compute the loss
         prediction_loss = prediction_loss / unroll_steps
@@ -141,10 +144,11 @@ class TransitionNetRSNN(BaseRSNN):
 
         # update the model
         loss.backward()
-        grad_norm = get_grad_norm(self.model)
+        grad_norm = get_total_grad_norm(self.model)
+        grad_norms = get_grad_norms(self.model)
         if max_norm:
             torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm)
-        clipped_grad_norm = get_grad_norm(self.model)
+        clipped_grad_norm = get_total_grad_norm(self.model)
         self.optimizer.step()
 
         result = {
@@ -154,6 +158,8 @@ class TransitionNetRSNN(BaseRSNN):
             "grad norm": grad_norm,
             "clipped grad norm": clipped_grad_norm,
         }
+
+        result.update(grad_norms)
 
         if record:
             result.update(self.get_monitor_data(exclude=excluded_monitor_keys))

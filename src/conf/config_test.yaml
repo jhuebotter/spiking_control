@@ -1,5 +1,5 @@
 defaults:
-  - task: franka
+  - task: reacher
   - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
@@ -7,25 +7,25 @@ defaults:
   - _self_
 
 seed: 42
-experiment: frankatest
+experiment: test
 device: cuda
 
 model:
   time:
     dt: 0.002
-    tau_mem: 0.05
-    tau_syn: 0.005
+    tau_mem: 0.02
+    tau_syn: 0.01
   activation:
     type: sigmoidspike
     beta: 25
   connection:
-    n_dims: 64
+    n_dims: null
   hidden_dim: 
-    - 2048
     - 1024
+    - 512
   initializer:
     sigma_u: 1.0
-    nu: 10
+    nu: 100
     bias_scale: 1.0
     scaling: 1.0
   input:
@@ -34,9 +34,9 @@ model:
     activation_steepness: 1.0
 
 optimizer:
-  type: smorms3
+  type: adam
   params:
-    lr: 0.0002
+    lr: 0.0005
 
 LowerBoundL2:
   strength: 0.0
@@ -56,6 +56,9 @@ run:
   load_dir: null
   prediction_unroll: 20
   eval_first: true
+  early_stop_metric: "test average reward"
+  early_stop_patience: 10
+  early_stop_mode: "max"
 
 plotting:
   render_every: 20
@@ -63,7 +66,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
-  total_steps: 960_000
+  total_steps: 500_000
 
 hydra:
   run:

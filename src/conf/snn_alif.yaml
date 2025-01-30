@@ -21,8 +21,8 @@ model:
         learn_syn: true
         learn_ada: false
         learn_param: tau
-        mem_param: full
-        syn_param: full
+        mem_param: single
+        syn_param: single
         ada_param: single
     readout:
       type: readout

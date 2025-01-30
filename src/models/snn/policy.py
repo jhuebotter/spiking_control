@@ -13,7 +13,7 @@ from control_stork.initializers import (
 from control_stork.connections import Connection
 from . import BaseRSNN
 from src.memory import EpisodeMemory
-from src.utils import get_grad_norm
+from src.utils import get_total_grad_norm, get_grad_norms
 from src.extratypes import *
 
 
@@ -38,7 +38,9 @@ class PolicyNetRSNN(BaseRSNN):
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
-        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(nu=200, sigma_u=1.0, time_step=1e-3),
+        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(
+            nu=200, sigma_u=1.0, time_step=1e-3
+        ),
         regularizers: list = [],
         w_regularizers: list = [],
         activation_steepness: float = 1.0,
@@ -47,7 +49,7 @@ class PolicyNetRSNN(BaseRSNN):
         device=None,
         **kwargs,
     ) -> None:
-        
+
         # gather layer parameters
         self.action_dim = action_dim
         self.state_dim = state_dim
@@ -82,29 +84,31 @@ class PolicyNetRSNN(BaseRSNN):
             **kwargs,
         )
 
-    def criterion(self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None) -> Tensor:
+    def criterion(
+        self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None
+    ) -> Tensor:
         if loss_gain is None:
             return torch.nn.functional.mse_loss(target, y_hat)
-        use = torch.tensor(loss_gain['use'], device=self.device)
-        gain = torch.tensor(loss_gain['gain'], device=self.device)
+        use = torch.tensor(loss_gain["use"], device=self.device)
+        gain = torch.tensor(loss_gain["gain"], device=self.device)
 
         # ! This is the original code - why was target sliced?
-        #return torch.mean(torch.pow(target[:, use] - y_hat[:, use], 2) * gain)
+        # return torch.mean(torch.pow(target[:, use] - y_hat[:, use], 2) * gain)
         return torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
 
     def train_fn(
-            self,
-            memory: EpisodeMemory,
-            transition_model: BaseRSNN,
-            loss_gain: Optional[dict] = None,
-            batch_size: int = 128,
-            warmup_steps: int = 5,
-            unroll_steps: int = 20,
-            max_norm: Optional[float] = None,
-            deterministic_transition: bool = False,
-            record: bool = False,
-            excluded_monitor_keys: Optional[list[str]] = None,
-        ) -> dict:
+        self,
+        memory: EpisodeMemory,
+        transition_model: BaseRSNN,
+        loss_gain: Optional[dict] = None,
+        batch_size: int = 128,
+        warmup_steps: int = 5,
+        unroll_steps: int = 20,
+        max_norm: Optional[float] = None,
+        deterministic_transition: bool = False,
+        record: bool = False,
+        excluded_monitor_keys: Optional[list[str]] = None,
+    ) -> dict:
 
         # sample a batch of transitions
         (
@@ -143,21 +147,26 @@ class PolicyNetRSNN(BaseRSNN):
         # unroll the model
         for i in range(unroll_steps):
             action_hat = self(new_state_hat, target, record=record)
-            new_state_delta_hat = transition_model(new_state_hat, action_hat, deterministic=deterministic_transition)
+            new_state_delta_hat = transition_model(
+                new_state_hat, action_hat, deterministic=deterministic_transition
+            )
             new_state_hat = new_state_hat + new_state_delta_hat
-            policy_loss += self.criterion(target, new_state_hat.squeeze(0), loss_gain=loss_gain)
+            policy_loss += self.criterion(
+                target, new_state_hat.squeeze(0), loss_gain=loss_gain
+            )
 
         # compute the loss
-        policy_loss = policy_loss / unroll_steps 
+        policy_loss = policy_loss / unroll_steps
         reg_loss = self.get_reg_loss()
         loss = policy_loss + reg_loss
 
         # update the model
         loss.backward()
-        grad_norm = get_grad_norm(self.model)
+        grad_norm = get_total_grad_norm(self.model)
+        grad_norms = get_grad_norms(self.model)
         if max_norm is not None:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
-        clipped_grad_norm = get_grad_norm(self.model)
+        clipped_grad_norm = get_total_grad_norm(self.model)
         self.optimizer.step()
 
         result = {
@@ -167,6 +176,8 @@ class PolicyNetRSNN(BaseRSNN):
             "grad norm": grad_norm,
             "clipped grad norm": clipped_grad_norm,
         }
+
+        result.update(grad_norms)
 
         if record:
             result.update(self.get_monitor_data(exclude=excluded_monitor_keys))

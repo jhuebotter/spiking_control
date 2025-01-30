@@ -53,16 +53,16 @@ model:
             threshold: ${UpperBoundL2.threshold}
             basis: ${UpperBoundL2.basis}
             dims: 1
-      weights:
-      - type: L2
-        kwargs:
-          strength: 0.001
+#      weights:
+#      - type: L2
+#        kwargs:
+#          strength: 0.001
 
 optimizer: ${optimizer}
 
 learning:
   batches_per_iteration: 25
   params:
-    batch_size: 512
+    batch_size: 256
     max_norm: 30
     warmup_steps: 5

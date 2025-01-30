@@ -15,18 +15,18 @@ class Transition:
     next_state: Tensor
 
     def __getitem__(self, key: str) -> Tensor:
-        if key in ['reward', 'done']:
+        if key in ["reward", "done"]:
             return torch.tensor(getattr(self, key))
         return getattr(self, key).clone().detach()
 
     def as_dict(self) -> dict[str, Tensor]:
         return {
-            'state': self.state,
-            'target': self.target,
-            'action': self.action,
-            'reward': self.reward,
-            'done': self.done,
-            'next_state': self.next_state
+            "state": self.state,
+            "target": self.target,
+            "action": self.action,
+            "reward": self.reward,
+            "done": self.done,
+            "next_state": self.next_state,
         }
 
 
@@ -37,18 +37,19 @@ class Episode:
     def append(self, transition: Transition) -> None:
         self.steps_.append(transition)
 
-    def get_cummulative_reward(self) -> float:
+    def get_cumulative_reward(self) -> float:
         return sum([step.reward for step in self.steps_])
 
     def __len__(self) -> int:
         return len(self.steps_)
-    
+
     def __getitem__(self, index: int) -> Transition:
         return self.steps_[index]
 
 
 class BaseMemory:
     """buffer object with maximum size to store recent experience"""
+
     def __init__(self, max_size: int) -> None:
         self.max_size = max_size
         self.reset()
@@ -65,16 +66,15 @@ class BaseMemory:
 
     def sample(self, batch_size: int) -> list:
         indices = np.random.choice(range(self.size), batch_size)
-        
+
         return [self.buffer[index] for index in indices]
 
 
 class EpisodeMemory(BaseMemory):
     """buffer object with maximum size to store recent experience"""
+
     def __init__(self, max_size: int) -> None:
-        super().__init__(
-            max_size=max_size
-        )
+        super().__init__(max_size=max_size)
 
     def sample_batch(
         self,
@@ -116,12 +116,12 @@ class EpisodeMemory(BaseMemory):
 
         # make a random sample from each episode of length = warmup_steps
         state_dim, target_dim, action_dim, reward_dim, done_dim, next_state_dim = (
-            episodes[0][0]['state'].size(-1),
-            episodes[0][0]['target'].size(-1),
-            episodes[0][0]['action'].size(-1),
+            episodes[0][0]["state"].size(-1),
+            episodes[0][0]["target"].size(-1),
+            episodes[0][0]["action"].size(-1),
             1,
             1,
-            episodes[0][0]['state'].size(-1),
+            episodes[0][0]["state"].size(-1),
         )
 
         # initialize tensors
@@ -130,28 +130,37 @@ class EpisodeMemory(BaseMemory):
         action_batch = torch.zeros((steps, batch_size, action_dim), device=device)
         reward_batch = torch.zeros((steps, batch_size, reward_dim), device=device)
         done_batch = torch.zeros((steps, batch_size, done_dim), device=device)
-        next_state_batch = torch.zeros((steps, batch_size, next_state_dim), device=device)
+        next_state_batch = torch.zeros(
+            (steps, batch_size, next_state_dim), device=device
+        )
 
         # fill tensors with random samples from episodes
         for j, episode in enumerate(episodes):
             r = torch.randint(low=0, high=len(episode) - steps, size=(1,))
             state_batch[:, j, :] = torch.stack(
-                [step['state'].squeeze() for step in episode[r : r + steps]]
+                [step["state"].squeeze() for step in episode[r : r + steps]]
             )
             target_batch[:, j, :] = torch.stack(
-                [step['target'].squeeze() for step in episode[r : r + steps]]
+                [step["target"].squeeze() for step in episode[r : r + steps]]
             )
             action_batch[:, j, :] = torch.stack(
-                [step['action'].squeeze() for step in episode[r : r + steps]]
+                [step["action"].squeeze() for step in episode[r : r + steps]]
             )
             reward_batch[:, j, :] = torch.stack(
-                [step['reward'].unsqueeze_(-1) for step in episode[r : r + steps]]
+                [step["reward"].unsqueeze_(-1) for step in episode[r : r + steps]]
             )
             done_batch[:, j, :] = torch.stack(
-                [step['done'].unsqueeze_(-1) for step in episode[r : r + steps]]
+                [step["done"].unsqueeze_(-1) for step in episode[r : r + steps]]
             )
             next_state_batch[:, j, :] = torch.stack(
-                [step['next_state'].squeeze() for step in episode[r : r + steps]]
+                [step["next_state"].squeeze() for step in episode[r : r + steps]]
             )
 
-        return [state_batch, target_batch, action_batch, reward_batch, done_batch, next_state_batch]
+        return [
+            state_batch,
+            target_batch,
+            action_batch,
+            reward_batch,
+            done_batch,
+            next_state_batch,
+        ]

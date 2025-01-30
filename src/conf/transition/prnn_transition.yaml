@@ -8,5 +8,5 @@ model:
 
 learning:
   params:
-    autoregressive: False
+    autoregressive: 0.0
     unroll_steps: 1

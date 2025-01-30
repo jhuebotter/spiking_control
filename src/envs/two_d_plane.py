@@ -211,6 +211,10 @@ class TwoDPlaneEnv(gym.Env):
             atol=self.epsilon,
         ):
             on_target = True
+            self.steps_on_target += 1
+            self.was_on_target = True
+            if self.steps_to_target == self.max_episode_steps:
+                self.steps_to_target = self.episode_step_count
             if self.done_on_target:
                 terminated = True
         on_edge = False
@@ -235,18 +239,27 @@ class TwoDPlaneEnv(gym.Env):
         # calculate reward
         reward = -np.linalg.norm(self.target[:2] - self.state[:2]) * self.dt
 
+        dist = np.linalg.norm(self.target[:2] - self.state[:2])
+        self.cumulative_distance += dist * self.dt
+
         # additional info
         info = {
             "on_target": on_target,
             "on_edge": on_edge,
+            "success": self.was_on_target,
+            "steps_to_target": self.steps_to_target,
+            "steps_on_target": self.steps_on_target,
             "max_steps": max_steps,
             "step": self.episode_step_count,
+            "cumulative_distance": self.cumulative_distance,
         }
 
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, options={}):
         self.episode_step_count = 0
+        self.steps_on_target = 0
+        self.cumulative_distance = 0.0
 
         state = options.get("state", None)
         target = options.get("target", None)
@@ -308,15 +321,22 @@ class TwoDPlaneEnv(gym.Env):
             atol=self.epsilon,
         ):
             on_target = True
+        self.was_on_target = on_target
+        self.steps_to_target = 0 if on_target else self.max_episode_steps
         on_edge = False
         if np.min(self.state) <= self.min_pos or np.max(self.state) >= self.max_pos:
             on_edge = True
         max_steps = False
+        # additional info
         info = {
             "on_target": on_target,
             "on_edge": on_edge,
+            "success": self.was_on_target,
+            "steps_to_target": self.steps_to_target,
+            "steps_on_target": self.steps_on_target,
             "max_steps": max_steps,
             "step": self.episode_step_count,
+            "cumulative_distance": self.cumulative_distance,
         }
 
         return observation, info

@@ -209,6 +209,7 @@ def make_regularizers(config: DictConfig) -> Union[list, list]:
     for reg in config.weights:
         type = reg.type.lower()
         if reg.kwargs.get("strength", 0.0) > 0.0:
+            print("found L2 regularizer with strength", reg.kwargs.get("strength", 0.0))
             if type == "l2":
                 reg = WeightL2Regularizer(**reg.kwargs)
             elif type == "l1":

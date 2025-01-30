@@ -3,7 +3,7 @@ from torch import nn, Tensor
 from torch.nn import functional as F
 from .base import BasePRNN
 from src.memory import EpisodeMemory
-from src.utils import get_grad_norm
+from src.utils import get_total_grad_norm, get_grad_norms
 from src.extratypes import *
 
 
@@ -11,19 +11,19 @@ class TransitionNetPRNN(BasePRNN):
     """probabilistic transition network"""
 
     def __init__(
-            self, 
-            action_dim: int, 
-            state_dim: int, 
-            hidden_dim: int, 
-            num_rec_layers: int = 1,
-            num_ff_layers: int = 1, 
-            bias: bool = True, 
-            act_fn: Callable = F.leaky_relu,
-            device: Union[str, torch.device] = "cpu",
-            dtype: torch.dtype = torch.float,
-            name: str = "transition model",
-            **kwargs
-        ) -> None:
+        self,
+        action_dim: int,
+        state_dim: int,
+        hidden_dim: int,
+        num_rec_layers: int = 1,
+        num_ff_layers: int = 1,
+        bias: bool = True,
+        act_fn: Callable = F.leaky_relu,
+        device: Union[str, torch.device] = "cpu",
+        dtype: torch.dtype = torch.float,
+        name: str = "transition model",
+        **kwargs
+    ) -> None:
 
         super().__init__(
             input_dim=state_dim + action_dim,
@@ -40,19 +40,21 @@ class TransitionNetPRNN(BasePRNN):
         )
 
     def criterion(self, mu: Tensor, y: Tensor, logvar: Tensor) -> Tensor:
-        return torch.nn.functional.gaussian_nll_loss(mu, y, logvar.exp(), reduction="mean")
-    
+        return torch.nn.functional.gaussian_nll_loss(
+            mu, y, logvar.exp(), reduction="mean"
+        )
+
     def train_fn(
-            self,
-            memory: EpisodeMemory,
-            batch_size: int = 128,
-            warmup_steps: int = 5,
-            unroll_steps: int = 1,
-            autoregressive: bool = False,
-            max_norm: Optional[float] = None,
-            record: bool = False,
-            excluded_monitor_keys: Optional[list[str]] = None,
-        ) -> dict:
+        self,
+        memory: EpisodeMemory,
+        batch_size: int = 128,
+        warmup_steps: int = 5,
+        unroll_steps: int = 1,
+        autoregressive: float = 0.0,
+        max_norm: Optional[float] = None,
+        record: bool = False,
+        excluded_monitor_keys: Optional[list[str]] = None,
+    ) -> dict:
 
         # sample a batch of transitions
         (
@@ -87,15 +89,21 @@ class TransitionNetPRNN(BasePRNN):
             action = actions[warmup_steps + i]
             next_state = next_states[warmup_steps + i]
             # compute the prediction
-            next_state_hat_delta_mu, next_state_hat_delta_logvar = self(state, action, record=record)
+            next_state_hat_delta_mu, next_state_hat_delta_logvar = self(
+                state, action, record=record
+            )
             next_state_hat_mu = state + next_state_hat_delta_mu
             # compute the loss
-            prediction_loss += self.criterion(next_state_hat_mu, next_state, next_state_hat_delta_logvar)
+            prediction_loss += self.criterion(
+                next_state_hat_mu, next_state, next_state_hat_delta_logvar
+            )
             # update the state
-            if autoregressive:
-                state = self.reparameterize(next_state_hat_mu, next_state_hat_delta_logvar)
-            else:
-                state = next_state
+            state = next_state   # teacher forcing
+            if autoregressive > 0.0:
+                if torch.rand(1).item() < autoregressive:
+                    state = self.reparameterize(
+                        next_state_hat_mu, next_state_hat_delta_logvar
+                    )   # autoregressive
 
         # compute the loss
         prediction_loss = prediction_loss / unroll_steps
@@ -104,10 +112,11 @@ class TransitionNetPRNN(BasePRNN):
 
         # update the model
         loss.backward()
-        grad_norm = get_grad_norm(self.model)
+        grad_norm = get_total_grad_norm(self.model)
+        grad_norms = get_grad_norms(self.model)
         if max_norm:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm)
-        clipped_grad_norm = get_grad_norm(self.model)
+        clipped_grad_norm = get_total_grad_norm(self.model)
         self.optimizer.step()
 
         result = {
@@ -117,6 +126,8 @@ class TransitionNetPRNN(BasePRNN):
             "grad norm": grad_norm,
             "clipped grad norm": clipped_grad_norm,
         }
+
+        result.update(grad_norms)
 
         if record:
             monitor_data = self.get_monitor_data(exclude=excluded_monitor_keys)
