@@ -46,6 +46,8 @@ UpperBoundL2:
   strength: 0.0
   threshold: 0.3
   basis: out
+transition.wl2: 0.0
+policy.wl2: 0.0
 
 task:
   params:

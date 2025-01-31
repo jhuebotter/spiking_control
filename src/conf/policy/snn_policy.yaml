@@ -11,7 +11,7 @@ model:
       weights:
         - type: L2
           kwargs:
-            strength: 0.001
+            strength: ${policy.wl2}
 
 optimizer:
   type: ${optimizer.type}
