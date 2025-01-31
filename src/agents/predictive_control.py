@@ -6,6 +6,7 @@ from src.eval_helpers import baseline_prediction
 
 import gymnasium as gym
 import torch
+from torch.optim.lr_scheduler import ExponentialLR
 from omegaconf import DictConfig
 from tqdm import tqdm
 from typing import Optional
@@ -99,6 +100,15 @@ class PredictiveControlAgent(BaseAgent):
             make_optimizer(self.policy_model, self.policy_config.get("optimizer", {}))
         )
 
+        # make a learning rate scheduler
+        self.transition_model_scheduler = ExponentialLR(
+            self.transition_model.optimizer, gamma=self.run_config.get("lr_decay", 1.0)
+        )
+
+        self.policy_model_scheduler = ExponentialLR(
+            self.policy_model.optimizer, gamma=self.run_config.get("lr_decay", 1.0)
+        )
+
         # wrap the environment with a video recorder if needed
         if hasattr(self.env, "manual_video"):
             self.manual_video = self.env.manual_video
@@ -143,11 +153,29 @@ class PredictiveControlAgent(BaseAgent):
                 return_results=[self.early_stop_metric],
             )
             self.save_models()
+            self.step_scheduler()
             self.iterations += 1
             if self.check_early_stop(test_results):
                 break
 
         self.finish_run()
+
+    def step_scheduler(self):
+            
+            # first get the current learning rate from the schedulers
+            transition_lr = self.transition_model_scheduler.get_last_lr()[0]
+            policy_lr = self.policy_model_scheduler.get_last_lr()[0]
+            # log the learning rates
+            self.log(
+                {
+                    "transition model learning rate": transition_lr,
+                    "policy model learning rate": policy_lr,
+                },
+                step=self.epochs,
+            )
+            # step the schedulers
+            self.transition_model_scheduler.step()
+            self.policy_model_scheduler.step()
 
     def check_early_stop(self, test_results):
 

@@ -5,7 +5,8 @@ model:
   params:
     num_rec_layers: 0
     num_ff_layers: 2
-    output_scale: 1.0
+    output_scale: null
+    activation_steepness: null
     regularization:
       weights:
         - type: L2
@@ -15,7 +16,7 @@ model:
 optimizer:
   type: ${optimizer.type}
   params:
-    lr: 0.0005
+    lr: 0.004
 
 learning:
   params:

@@ -30,8 +30,8 @@ model:
     scaling: 1.0
   input:
     scaling: 1.0
-  output:
-    activation_steepness: 1.0
+#  output:
+#    activation_steepness: null
 
 optimizer:
   type: adam
@@ -57,8 +57,9 @@ run:
   prediction_unroll: 20
   eval_first: true
   early_stop_metric: "test average reward"
-  early_stop_patience: 10
+  early_stop_patience: 20
   early_stop_mode: "max"
+  lr_decay: 0.97
 
 plotting:
   render_every: 20
@@ -66,7 +67,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
-  total_steps: 500_000
+  total_steps: 400_000
 
 hydra:
   run:
