@@ -5,11 +5,13 @@ model:
     dt: ${model.time.dt}
     repeat_input: 8
     out_style: last
-    activation_steepness: ${model.output.activation_steepness}
+    encoder:
+      type: ${model.encoder.type}
+      kwargs: ${model.encoder.kwargs}
     input:
       type: input
-      kwargs: 
-        scaling: ${model.input.scaling}
+      # kwargs: 
+      #   scaling: ${model.input.scaling}
     neuron:
       type: lif
       kwargs:

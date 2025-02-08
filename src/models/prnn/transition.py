@@ -50,7 +50,7 @@ class TransitionNetPRNN(BasePRNN):
         batch_size: int = 128,
         warmup_steps: int = 5,
         unroll_steps: int = 1,
-        autoregressive: float = 0.0,
+        teacher_forcing_p: float = 1.0,
         max_norm: Optional[float] = None,
         record: bool = False,
         excluded_monitor_keys: Optional[list[str]] = None,
@@ -97,13 +97,11 @@ class TransitionNetPRNN(BasePRNN):
             prediction_loss += self.criterion(
                 next_state_hat_mu, next_state, next_state_hat_delta_logvar
             )
+
             # update the state
-            state = next_state   # teacher forcing
-            if autoregressive > 0.0:
-                if torch.rand(1).item() < autoregressive:
-                    state = self.reparameterize(
-                        next_state_hat_mu, next_state_hat_delta_logvar
-                    )   # autoregressive
+            state = next_state  # teacher forcing
+            if teacher_forcing_p < 1.0 and torch.rand(1).item() > teacher_forcing_p:
+                state = next_state_hat   # autoregressive
 
         # compute the loss
         prediction_loss = prediction_loss / unroll_steps

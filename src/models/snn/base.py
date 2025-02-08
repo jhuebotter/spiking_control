@@ -25,7 +25,7 @@ from control_stork.plotting import plot_spikes, plot_traces
 from control_stork.activations import SigmoidSpike
 from control_stork.layers import Layer
 from src.extratypes import *
-
+    
 
 class BaseRSNN(torch.nn.Module):
     """Base class for spiking models with a hidden state."""
@@ -40,12 +40,14 @@ class BaseRSNN(torch.nn.Module):
         dt: float = 1e-3,
         repeat_input: int = 1,
         out_style: str = "last",
+        input_encoder: torch.nn.Module = None,
         input_type: CellGroup = InputGroup,
         input_kwargs: dict = {},
         neuron_type: CellGroup = FastLIFGroup,
         neuron_kwargs: dict = {},
         readout_type: CellGroup = FastReadoutGroup,
         readout_kwargs: dict = {},
+        output_kwargs: dict = {},
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
@@ -54,9 +56,6 @@ class BaseRSNN(torch.nn.Module):
         ),
         regularizers: list = [],
         w_regularizers: list = [],
-        activation_steepness: Optional[float] = None,
-        activation_bias: Optional[float] = None,
-        output_scale: Optional[float] = None,
         device: torch.device = torch.device("cpu"),
         name: str = "RSNN",
         # **kwargs,
@@ -96,6 +95,11 @@ class BaseRSNN(torch.nn.Module):
         self.neuron_kwargs["store_sequences"] = ["out", "mem"]
         self.neuron_kwargs["activation"] = self.activation
         self.readout_kwargs["store_sequences"] = ["out", "mem"]
+
+        # make the input encoder
+        self.input_encoder = input_encoder
+        if self.input_encoder is not None:  # ! TODO: Implement proper parameterization for this
+            self.input_dim = self.input_encoder.compute_output_shape(self.input_dim)
 
         # make the model
         self.model = RecurrentSpikingModel(device=device)
@@ -242,8 +246,8 @@ class BaseRSNN(torch.nn.Module):
                 TimeAverageReadoutGroup(
                     self.output_dim,
                     steps=self.repeat_input,
-                    weight_scale=1.0,
                     name=f"{self.name} Time Average Readout Group",
+                    **output_kwargs,
                 )
             )
 
@@ -251,10 +255,19 @@ class BaseRSNN(torch.nn.Module):
             output_group = new = self.model.add_group(
                 DirectReadoutGroup(
                     self.output_dim,
-                    weight_scale=1.0,
                     name=f"{self.name} Direct Readout Group",
+                    **output_kwargs,
                 )
             )
+
+        self.model.add_monitor(
+            PlotStateMonitor(
+                output_group,
+                "mem",
+                plot_fn=plot_traces,
+                title=f"{self.name} Average Readout Layer",
+            )
+        )
 
         self.model.add_monitor(
             PlotStateMonitor(
@@ -282,30 +295,23 @@ class BaseRSNN(torch.nn.Module):
             self.initializer.initialize(layer)
         con.init_parameters(readout_initializer)
 
-        if activation_steepness is not None:
-            self.activation_steepness = torch.nn.Parameter(torch.tensor(activation_steepness), requires_grad=True)
-        else:
-            self.activation_steepness = 1.0
-
-        if activation_bias is not None:
-            self.activation_bias = torch.nn.Parameter(torch.tensor(activation_bias), requires_grad=True)
-        else:
-            self.activation_bias = 0.0
-        if output_scale is not None:
-            self.output_scale = torch.nn.Parameter(torch.tensor(output_scale), requires_grad=True)
-        else:
-            self.output_scale = 1.0
-
         self.model.add_monitor(
             PropertyMonitor(
-                self,
-                "activation_steepness",
+                input_group,
+                "scaling",
             )
         )
 
         self.model.add_monitor(
             PropertyMonitor(
-                self,
+                output_group,
+                "weight_scale",
+            )
+        )
+
+        self.model.add_monitor(
+            PropertyMonitor(
+                output_group,
                 "output_scale",
             )
         )
@@ -365,14 +371,14 @@ class BaseRSNN(torch.nn.Module):
             x = x.unsqueeze(0)
         # control stork networks want (N, T, D)
         return x.transpose(0, 1)
-
+    
     def step(self, x: Tensor, record: bool = False) -> Tensor:
         """perform a single step of the model"""
         return self.output_activation(self.model(x, record=record))
-
+    
     def output_activation(self, x: Tensor) -> Tensor:
-        """apply the output activation function"""
-        return self.output_scale * torch.tanh(self.activation_bias + self.activation_steepness * x)
+        """apply the output activation function, but tanh is already applied in DirectReadoutGroup"""
+        return x
 
     def forward(self, *args: Tensor, record: bool = False, **kwargs) -> Tensor:
         """forward pass of the model on an input sequence"""
@@ -385,8 +391,11 @@ class BaseRSNN(torch.nn.Module):
 
         x_outs = torch.empty((T, N, self.output_dim), device=self.device)
         for t in range(T):
+            x_in = x[:, t : t + 1]
+            if self.input_encoder is not None:
+                x_in = self.input_encoder(x_in)
             for _ in range(self.repeat_input):
-                x_out = self.step(x[:, t : t + 1], record=record)
+                x_out = self.step(x_in, record=record)
             x_outs[t] = x_out[:, -1]
 
         return x_outs

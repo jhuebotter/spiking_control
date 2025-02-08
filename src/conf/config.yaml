@@ -27,11 +27,9 @@ model:
     sigma_u: 1.0
     nu: 10
     bias_scale: 1.0
-    scaling: 1.0
+    scaling: 1
   input:
-    scaling: 0.1
-#  output:
-#    activation_steepness: null
+    scaling: 1.0
 
 optimizer:
   type: smorms3

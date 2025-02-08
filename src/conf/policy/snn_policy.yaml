@@ -1,12 +1,17 @@
 defaults:
-  - /snn
+  - /snn_alif
 
 model:
   params:
     num_rec_layers: 0
     num_ff_layers: 2
-    output_scale: null
-    activation_steepness: null
+    output:
+      kwargs:
+        weight_scale: 0.01
+        output_scale: 1.0
+        learn_weight_scale: true
+        learn_output_scale: false
+        apply_tanh: true
     regularization:
       weights:
         - type: L2

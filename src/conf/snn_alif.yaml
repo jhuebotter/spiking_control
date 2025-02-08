@@ -5,22 +5,24 @@ model:
     dt: ${model.time.dt}
     repeat_input: 8
     out_style: last
-    activation_steepness: ${model.output.activation_steepness}
+    encoder:
+      type: ${model.encoder.type}
+      kwargs: ${model.encoder.kwargs}
     input:
       type: input
       kwargs: 
         scaling: ${model.input.scaling}
+        learn_scaling: ${model.input.learn_scaling}
     neuron:
       type: alif
       kwargs:
         reset: sub
         tau_mem: ${model.time.tau_mem}
         tau_syn: ${model.time.tau_syn}
-        tau_ada: 0.1
-        learn_mem: true
-        learn_syn: true
+        tau_ada: 0.0
+        learn_mem: false
+        learn_syn: false
         learn_ada: false
-        learn_param: tau
         mem_param: single
         syn_param: single
         ada_param: single
@@ -64,13 +66,13 @@ model:
       weights:
       - type: L2
         kwargs:
-          strength: 0.001
+          strength: 0.0
 
 optimizer: ${optimizer}
 
 learning:
   batches_per_iteration: 25
   params:
-    batch_size: 512
+    batch_size: 256
     max_norm: 30
     warmup_steps: 5

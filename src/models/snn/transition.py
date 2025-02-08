@@ -34,6 +34,7 @@ class TransitionNetRSNN(BaseRSNN):
         neuron_kwargs: dict = {},
         readout_type: CellGroup = FastReadoutGroup,
         readout_kwargs: dict = {},
+        output_kwargs: dict = {},
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
@@ -42,9 +43,6 @@ class TransitionNetRSNN(BaseRSNN):
         ),
         regularizers: list = [],
         w_regularizers: list = [],
-        activation_steepness: float = 1.0,
-        activation_bias: float = None,
-        output_scale: float = 0.1,
         device=None,
         **kwargs,
     ) -> None:
@@ -67,15 +65,13 @@ class TransitionNetRSNN(BaseRSNN):
             neuron_kwargs=neuron_kwargs,
             readout_type=readout_type,
             readout_kwargs=readout_kwargs,
+            output_kwargs=output_kwargs,
             connection_type=connection_type,
             connection_kwargs=connection_kwargs,
             activation=activation,
             initializer=initializer,
             regularizers=regularizers,
             w_regularizers=w_regularizers,
-            activation_steepness=activation_steepness,
-            activation_bias=activation_bias,
-            output_scale=output_scale,
             device=device,
             name="transition model",
             **kwargs,
@@ -90,7 +86,7 @@ class TransitionNetRSNN(BaseRSNN):
         batch_size: int = 128,
         warmup_steps: int = 5,
         unroll_steps: int = 1,
-        autoregressive: float = 0.0,
+        teacher_forcing_p: float = 1.0,
         max_norm: Optional[float] = None,
         record: bool = False,
         excluded_monitor_keys: Optional[list[str]] = None,
@@ -133,9 +129,8 @@ class TransitionNetRSNN(BaseRSNN):
             prediction_loss += self.criterion(next_state_hat.squeeze(0), next_state)
             
             state = next_state  # teacher forcing
-            if autoregressive > 0.0:
-                if torch.rand(1).item() < autoregressive:
-                    state = next_state_hat   # autoregressive
+            if teacher_forcing_p < 1.0 and torch.rand(1).item() > teacher_forcing_p:
+                state = next_state_hat   # autoregressive
 
         # compute the loss
         prediction_loss = prediction_loss / unroll_steps

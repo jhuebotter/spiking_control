@@ -1,7 +1,7 @@
 from . import BaseAgent
 from src.memory import EpisodeMemory, Transition, Episode
 from src.models import make_transition_model, make_policy_model
-from ..utils import make_optimizer, dict_mean, FrameStack
+from ..utils import make_optimizer, dict_mean, FrameStack, ExponentialScheduler
 from src.eval_helpers import baseline_prediction
 
 import gymnasium as gym
@@ -101,12 +101,24 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # make a learning rate scheduler
-        self.transition_model_scheduler = ExponentialLR(
+        self.transition_model_lr_scheduler = ExponentialLR(
             self.transition_model.optimizer, gamma=self.run_config.get("lr_decay", 1.0)
         )
 
-        self.policy_model_scheduler = ExponentialLR(
+        self.policy_model_lr_scheduler = ExponentialLR(
             self.policy_model.optimizer, gamma=self.run_config.get("lr_decay", 1.0)
+        )
+
+        # make a teacher forcing scheduler
+        self.transition_model_tf_scheduler = ExponentialScheduler(
+            self.run_config.get("teacher_forcing_p", 1.0),
+            gamma=self.run_config.get("teacher_forcing_decay", 1.0),
+        )
+
+        # make a noise scheduler
+        self.policy_model_noise_scheduler = ExponentialScheduler(
+            self.run_config.get("action_noise_std", 0.0),
+            gamma=self.run_config.get("action_noise_decay", 1.0),
         )
 
         # wrap the environment with a video recorder if needed
@@ -161,21 +173,27 @@ class PredictiveControlAgent(BaseAgent):
         self.finish_run()
 
     def step_scheduler(self):
-            
-            # first get the current learning rate from the schedulers
-            transition_lr = self.transition_model_scheduler.get_last_lr()[0]
-            policy_lr = self.policy_model_scheduler.get_last_lr()[0]
-            # log the learning rates
-            self.log(
-                {
-                    "transition model learning rate": transition_lr,
-                    "policy model learning rate": policy_lr,
-                },
-                step=self.epochs,
-            )
-            # step the schedulers
-            self.transition_model_scheduler.step()
-            self.policy_model_scheduler.step()
+
+        # first get the current parameters from the schedulers
+        transition_lr = self.transition_model_lr_scheduler.get_last_lr()[0]
+        policy_lr = self.policy_model_lr_scheduler.get_last_lr()[0]
+        transition_teacher_forcing_p = self.transition_model_tf_scheduler.get_value()
+        policy_noise_std = self.policy_model_noise_scheduler.get_value()
+        # log them
+        self.log(
+            {
+                "transition model learning rate": transition_lr,
+                "policy model learning rate": policy_lr,
+                "transition model teacher forcing p": transition_teacher_forcing_p,
+                "policy model noise std": policy_noise_std,
+            },
+            step=self.epochs,
+        )
+        # step the schedulers
+        self.transition_model_lr_scheduler.step()
+        self.policy_model_lr_scheduler.step()
+        self.transition_model_tf_scheduler.step()
+        self.policy_model_noise_scheduler.step()
 
     def check_early_stop(self, test_results):
 
@@ -265,6 +283,12 @@ class PredictiveControlAgent(BaseAgent):
                 # predict the action
                 actions = self.policy_model.predict(obs, targets)
                 actions = actions.squeeze(0).clamp(action_min, action_max).detach()
+
+                # Add Gaussian noise
+                noise_std = self.policy_model_noise_scheduler.get_value()
+                if noise_std > 0:
+                    noise = torch.randn_like(actions) * noise_std  # Generate Gaussian noise
+                    actions = (actions + noise).clamp(action_min, action_max)  # Apply noise and re-clamp
 
                 # step the environment
                 observations, rewards, terminates, truncateds, infos = self.env.step(
@@ -384,6 +408,7 @@ class PredictiveControlAgent(BaseAgent):
         n_transition_batches = self.transition_config.learning.get(
             "batches_per_iteration", 1
         )
+        teacher_forcing_p = self.transition_model_tf_scheduler.get_value()
         pbar = tqdm(
             range(n_transition_batches), desc=f"{'training transition model':30}"
         )
@@ -392,6 +417,7 @@ class PredictiveControlAgent(BaseAgent):
                 memory=self.memory,
                 record=True,
                 excluded_monitor_keys=self.transition_model.plot_monitors,
+                teacher_forcing_p=teacher_forcing_p,
                 **self.transition_config.get("learning", {}).get("params", {}),
             )
             self.transition_updates += 1

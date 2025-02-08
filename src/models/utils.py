@@ -10,6 +10,7 @@ from control_stork.nodes import (
     DirectReadoutGroup,
     TimeAverageReadoutGroup,
 )
+from control_stork.encoders import RBFEncoder
 from control_stork.connections import Connection, BottleneckLinearConnection
 from control_stork.regularizers import (
     LowerBoundL1,
@@ -35,8 +36,6 @@ def make_transition_model(
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
         "num_ff_layers": config.params.get("num_ff_layers", 2),
-        "activation_steepness": config.params.get("activation_steepness", 1.0),
-        "output_scale": config.params.get("output_scale", 0.1),
         **kwargs,
     }
     if type_ == "prnn":
@@ -88,8 +87,6 @@ def make_policy_model(
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
         "num_ff_layers": config.params.get("num_ff_layers", 2),
-        "activation_steepness": config.params.get("activation_steepness", 1.0),
-        "output_scale": config.params.get("output_scale", 1.0),
         **kwargs,
     }
     if type_ == "prnn":
@@ -142,6 +139,7 @@ def make_snn_objects(config: DictConfig) -> dict:
     params["input_kwargs"] = config.params.input.get("kwargs", {})
     params["neuron_kwargs"] = config.params.neuron.get("kwargs", {})
     params["readout_kwargs"] = config.params.readout.get("kwargs", {})
+    params["output_kwargs"] = config.params.output.get("kwargs", {})
 
     # make the activation function
     params["activation"] = make_act_fn(
@@ -158,6 +156,14 @@ def make_snn_objects(config: DictConfig) -> dict:
     params["connection_kwargs"] = config.params.connection.get("kwargs", {})
     if params["connection_kwargs"].get("n_dims", 0) in [0, None, "None"]:
         del params["connection_kwargs"].n_dims
+
+    # make the encoder
+    encoder_class = get_encoder_class(config.params.encoder.get("type", "default"))
+    if encoder_class is None:
+        params["input_encoder"] = None
+    else:
+        encoder_kwargs = config.params.encoder.get("kwargs", {})
+        params["input_encoder"] = encoder_class(**encoder_kwargs)
 
     # make the initializer
     params["initializer"] = make_initilizer(
@@ -221,6 +227,16 @@ def make_regularizers(config: DictConfig) -> Union[list, list]:
             w_regularizers.append(reg)
 
     return regularizers, w_regularizers
+
+
+def get_encoder_class(type: str = "default") -> torch.nn.Module:
+    type = type.lower()
+    if type == "default":
+        return None
+    elif type == "rbf":
+        return RBFEncoder
+    else:
+        raise NotImplementedError(f"the encoder {type} is not implemented")
 
 
 def get_layer_class(type: str = "default") -> torch.nn.Module:

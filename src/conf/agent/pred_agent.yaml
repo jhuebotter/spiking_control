@@ -1,7 +1,7 @@
 memory:
   type: "episode"
   params:
-    max_size: 2048
+    max_size: 2000
 
 steps_per_iteration: 5000
 steps_per_evaluation: 1600

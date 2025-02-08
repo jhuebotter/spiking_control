@@ -265,3 +265,32 @@ def load_weights_from_disk(
         optim.load_state_dict(current_state)
 
     return model, optim
+
+
+class ExponentialScheduler:
+    def __init__(self, start: float=1.0, end: float=0.0, gamma: float=0.97):
+        """
+        Exponential decay scheduler, e.g. for teacher forcing probability.
+
+        Args:
+            start (float): Initial value for schedule (default: 1.0)
+            end (float): Minimum value at the end of training (default: 0.0)
+            gamma (float): Multiplicative factor for exponential decay (default: 0.97)
+        """
+        self.start = start
+        self.end = end
+        self.gamma = gamma
+        self.current_step = 0
+
+    def reset(self):
+        """Reset the scheduler to the initial state."""
+        self.current_step = 0
+
+    def step(self):
+        """Update the teacher forcing probability."""
+        self.current_step += 1
+        return self.get_value()
+
+    def get_value(self):
+        """Get the current teacher forcing probability."""
+        return max(self.start * (self.gamma ** self.current_step), self.end)
