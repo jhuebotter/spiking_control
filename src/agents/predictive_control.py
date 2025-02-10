@@ -63,9 +63,9 @@ class PredictiveControlAgent(BaseAgent):
         self.eval_first = config.run.get("eval_first", True)
 
         # initialize dimensions
-        self.action_dim = env.action_space.shape[1]
-        self.state_dim = env.observation_space["proprio"].shape[1]
-        self.target_dim = env.observation_space["target"].shape[1]
+        self.action_dim = env.unwrapped.action_space.shape[1]
+        self.state_dim = env.unwrapped.observation_space["proprio"].shape[1]
+        self.target_dim = env.unwrapped.observation_space["target"].shape[1]
 
         self.setup()
 
@@ -122,8 +122,8 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # wrap the environment with a video recorder if needed
-        if hasattr(self.env, "manual_video"):
-            self.manual_video = self.env.manual_video
+        if hasattr(self.env.unwrapped, "manual_video"):
+            self.manual_video = self.env.unwrapped.manual_video
         else:
             self.manual_video = True
         if not self.manual_video:
@@ -239,17 +239,21 @@ class PredictiveControlAgent(BaseAgent):
         if reset_memory:
             self.memory.reset()
 
-        set_test_mode_fn = getattr(self.env, "set_test_mode", None)
+        set_test_mode_fn = getattr(self.env.unwrapped, "set_test_mode", None)
         if callable(set_test_mode_fn):
             print("setting test mode to False")
             set_test_mode_fn(False)
 
-        num_envs = self.env.num_envs
+        num_envs = self.env.unwrapped.num_envs
 
         episodes = [Episode() for _ in range(num_envs)]
 
-        action_min = torch.tensor(self.env.action_space.low, device=self.device)
-        action_max = torch.tensor(self.env.action_space.high, device=self.device)
+        action_min = torch.tensor(
+            self.env.unwrapped.action_space.low, device=self.device
+        )
+        action_max = torch.tensor(
+            self.env.unwrapped.action_space.high, device=self.device
+        )
 
         # reset the environment
         observations, infos = self.env.reset()
@@ -287,8 +291,12 @@ class PredictiveControlAgent(BaseAgent):
                 # Add Gaussian noise
                 noise_std = self.policy_model_noise_scheduler.get_value()
                 if noise_std > 0:
-                    noise = torch.randn_like(actions) * noise_std  # Generate Gaussian noise
-                    actions = (actions + noise).clamp(action_min, action_max)  # Apply noise and re-clamp
+                    noise = (
+                        torch.randn_like(actions) * noise_std
+                    )  # Generate Gaussian noise
+                    actions = (actions + noise).clamp(
+                        action_min, action_max
+                    )  # Apply noise and re-clamp
 
                 # step the environment
                 observations, rewards, terminates, truncateds, infos = self.env.step(
@@ -307,35 +315,6 @@ class PredictiveControlAgent(BaseAgent):
                         device=self.device,
                         dtype=torch.float32,
                     )
-                if "_final_observation" in infos.keys():
-                    final = infos["_final_observation"]
-                    for i, f in enumerate(final):
-                        if f:
-                            if isinstance(
-                                infos["final_observation"][i]["proprio"],
-                                torch.Tensor,
-                            ):
-                                next_obs[i] = infos["final_observation"][i][
-                                    "proprio"
-                                ].clone()
-                            else:
-                                next_obs[i] = torch.tensor(
-                                    infos["final_observation"][i]["proprio"],
-                                    device=self.device,
-                                    dtype=torch.float32,
-                                )
-
-                            # TODO: build some failsafe for when the info dict is not complete
-                            final_info = infos["final_info"][i]
-                            success = final_info["success"]
-                            success_tracker.append(1 if success else 0)
-                            steps_to_target = final_info["steps_to_target"]
-                            steps_to_target_tracker.append(steps_to_target)
-                            steps_on_target = final_info["steps_on_target"]
-                            steps_on_target_tracker.append(steps_on_target)
-                            cumulative_distance_tracker.append(
-                                final_info["cumulative_distance"]
-                            )
 
                 # store the transition
                 for i, (o, t, a, r, d, no) in enumerate(
@@ -349,6 +328,16 @@ class PredictiveControlAgent(BaseAgent):
                         episodes[i] = Episode()
                         completed_episodes += 1
                         self.episodes += 1
+                        if "success" in infos:
+                            success_tracker.append(1 if infos["success"][i] else 0)
+                        if "steps_to_target" in infos:
+                            steps_to_target_tracker.append(infos["steps_to_target"][i])
+                        if "steps_on_target" in infos:
+                            steps_on_target_tracker.append(infos["steps_on_target"][i])
+                        if "cumulative_distance" in infos:
+                            cumulative_distance_tracker.append(
+                                infos["cumulative_distance"][i]
+                            )
 
                 # update the state
                 if isinstance(observations["proprio"], torch.Tensor):
@@ -437,7 +426,7 @@ class PredictiveControlAgent(BaseAgent):
             policy_result = self.policy_model.train_fn(
                 memory=self.memory,
                 transition_model=self.transition_model,
-                loss_gain=self.env.call("get_loss_gain")[0],
+                loss_gain=self.env.unwrapped.call("get_loss_gain")[0],
                 record=True,
                 excluded_monitor_keys=self.policy_model.plot_monitors,
                 **self.policy_config.get("learning", {}).get("params", {}),
@@ -501,10 +490,10 @@ class PredictiveControlAgent(BaseAgent):
             print("setting test mode to True")
             set_test_mode_fn(True)
 
-        num_envs = env.num_envs
+        num_envs = env.unwrapped.num_envs
 
-        action_min = torch.tensor(env.action_space.low, device=self.device)
-        action_max = torch.tensor(env.action_space.high, device=self.device)
+        action_min = torch.tensor(env.unwrapped.action_space.low, device=self.device)
+        action_max = torch.tensor(env.unwrapped.action_space.high, device=self.device)
 
         observations, infos = env.reset()
         if isinstance(observations["proprio"], torch.Tensor):
@@ -529,7 +518,7 @@ class PredictiveControlAgent(BaseAgent):
         if render:
             # check if the environment is wrapped with RecordVideo
             if not self.manual_video:
-                env.start_video_recorder()
+                env.start_recording(f"recording_{self.iterations+1}")
             else:
                 completed_framestacks = []
                 framestacks = [FrameStack() for _ in range(num_envs)]
@@ -579,38 +568,6 @@ class PredictiveControlAgent(BaseAgent):
                             dtype=torch.float32,
                         )
 
-                    if "_final_observation" in infos.keys():
-                        final = infos["_final_observation"]
-                        for i, f in enumerate(final):
-                            if f:
-                                if isinstance(
-                                    infos["final_observation"][i]["proprio"],
-                                    torch.Tensor,
-                                ):
-                                    next_obs[i] = (
-                                        infos["final_observation"][i]["proprio"]
-                                        .clone()
-                                        .detach()
-                                    )
-                                else:
-                                    next_obs[i] = torch.tensor(
-                                        infos["final_observation"][i]["proprio"],
-                                        device=self.device,
-                                        dtype=torch.float32,
-                                    )
-
-                                # TODO: build some failsafe for when the info dict is not complete
-                                final_info = infos["final_info"][i]
-                                success = final_info["success"]
-                                success_tracker.append(1 if success else 0)
-                                steps_to_target = final_info["steps_to_target"]
-                                steps_to_target_tracker.append(steps_to_target)
-                                steps_on_target = final_info["steps_on_target"]
-                                steps_on_target_tracker.append(steps_on_target)
-                                cumulative_distance_tracker.append(
-                                    final_info["cumulative_distance"]
-                                )
-
                     # store the transition
                     for i, (o, t, a, r, d, no) in enumerate(
                         zip(obs, targets, actions, rewards, dones, next_obs)
@@ -620,6 +577,20 @@ class PredictiveControlAgent(BaseAgent):
                             completed_episodes.append(episodes[i])
                             total_reward += episodes[i].get_cumulative_reward()
                             episodes[i] = Episode()
+                            if "success" in infos:
+                                success_tracker.append(1 if infos["success"][i] else 0)
+                            if "steps_to_target" in infos:
+                                steps_to_target_tracker.append(
+                                    infos["steps_to_target"][i]
+                                )
+                            if "steps_on_target" in infos:
+                                steps_on_target_tracker.append(
+                                    infos["steps_on_target"][i]
+                                )
+                            if "cumulative_distance" in infos:
+                                cumulative_distance_tracker.append(
+                                    infos["cumulative_distance"][i]
+                                )
 
                     # store frames for rendering
                     if render and self.manual_video:
@@ -649,8 +620,8 @@ class PredictiveControlAgent(BaseAgent):
                     step += num_envs
                     pbar.update(num_envs)
 
-            if not self.manual_video:
-                env.close_video_recorder()
+            if not self.manual_video and render:
+                env.stop_recording()
 
         # log the results
         average_reward = total_reward / len(completed_episodes)
@@ -694,7 +665,7 @@ class PredictiveControlAgent(BaseAgent):
                 "test prediction animations": animate_predictions(
                     completed_episodes,
                     self.transition_model,
-                    labels=env.get_attr("state_labels")[0],
+                    labels=env.unwrapped.get_attr("state_labels")[0],
                     warmup=self.transition_config.learning.params.get(
                         "warmup_steps", 0
                     ),

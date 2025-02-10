@@ -5,6 +5,7 @@ import pygame
 from pygame import gfxdraw
 import numpy as np
 import math
+from typing import Optional
 
 
 WHITE = (255, 255, 255)
@@ -256,13 +257,16 @@ class TwoDPlaneEnv(gym.Env):
 
         return observation, reward, terminated, truncated, info
 
-    def reset(self, seed=None, options={}):
+    def reset(self, seed: Optional[int]=None, options: Optional[dict]=None):
         self.episode_step_count = 0
         self.steps_on_target = 0
         self.cumulative_distance = 0.0
 
-        state = options.get("state", None)
-        target = options.get("target", None)
+        state = None
+        target = None
+        if options is not None:
+            state = options.get("state", None)
+            target = options.get("target", None)
 
         if seed is not None:
             self.set_seed(seed)

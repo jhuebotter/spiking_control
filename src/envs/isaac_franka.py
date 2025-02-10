@@ -1,7 +1,16 @@
-from omni.isaac.lab.app import AppLauncher
+from isaaclab.app import AppLauncher
 
-app_launcher = AppLauncher({"headless": False})
+app_launcher = AppLauncher({"headless": False, "enable_cameras": True})
 simulation_app = app_launcher.app
+
+# ! This is just to hunt for isaac warnings that are not being very helpful
+# import omni.log
+# log = omni.log.get_log()
+# def on_log(channel, level, module, filename, func, line_no, msg, pid, tid, timestamp):
+#    print(
+#        f"received a message on {channel} from {module} at {filename}:{line_no}: {msg}"
+#    )
+# consumer = log.add_message_consumer(on_log)
 
 import torch
 import gymnasium as gym
@@ -11,21 +20,21 @@ from collections.abc import Sequence
 from typing import Optional
 import copy
 
-import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.assets import (
+import isaaclab.sim as sim_utils
+from isaaclab.assets import (
     Articulation,
     ArticulationCfg,
     RigidObject,
     RigidObjectCfg,
 )
-from omni.isaac.lab.envs import DirectRLEnv, DirectRLEnvCfg
-from omni.isaac.lab.scene import InteractiveSceneCfg
-from omni.isaac.lab.sim import SimulationCfg
-from omni.isaac.lab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from omni.isaac.lab.utils import configclass
-from omni.isaac.lab.utils.math import sample_uniform
-from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
-from omni.isaac.lab.actuators import ImplicitActuatorCfg
+from isaaclab.envs import DirectRLEnv, DirectRLEnvCfg
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sim import SimulationCfg
+from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
+from isaaclab.utils import configclass
+from isaaclab.utils.math import sample_uniform
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.actuators import ImplicitActuatorCfg
 
 
 def change_joint_properties(
@@ -131,15 +140,22 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
     episode_length_s = 3.0
     target_reach_threshold = 0.1  # probably less than this
     active_joints_idx = [0, 1, 2, 3, 4, 5]
-    num_actions: int = len(active_joints_idx)
-    num_observations = 20
-    num_states = 0
+    num_actions_: int = len(active_joints_idx)
+    num_observations_ = 20
     decimation = 1
     control = "position"
     joint_stiffness = 400.0
     joint_damping = 80.0
     joint_friction = 1.07
     joint_armature = 0.01
+
+    observation_space: spaces.Box = spaces.Box(
+        low=-np.inf, high=np.inf, shape=(num_observations_,), dtype=np.float32
+    )
+
+    action_space: spaces.Box = spaces.Box(
+        low=-1.0, high=1.0, shape=(num_actions_,), dtype=np.float32
+    )
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -245,7 +261,10 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
 
     def set_active_joints_idx(self, active_joints_idx) -> None:
         self.active_joints_idx = active_joints_idx
-        self.num_actions = len(self.active_joints_idx)
+        self.num_actions_ = len(self.active_joints_idx)
+        self.action_space: spaces.Box = spaces.Box(
+            low=-1.0, high=1.0, shape=(self.num_actions_,), dtype=np.float32
+        )
 
 
 class FrankaReachCustomEnv(DirectRLEnv):
@@ -268,7 +287,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.terminate_on_target = False
 
         self.action_space = gym.spaces.Box(
-            -1.0, 1.0, (self.num_envs, self.cfg.num_actions)
+            -1.0, 1.0, (self.num_envs, self.cfg.num_actions_)
         )
 
         # create auxiliary variables for computing applied action, observations and rewards
@@ -281,6 +300,10 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.robot_dof_velocity_limits = self.robot.data.soft_joint_vel_limits[0].to(
             device=self.device
         )
+
+        print(f"[INFO]: robot dof lower limits: {self.robot_dof_lower_limits}")
+        print(f"[INFO]: robot dof upper limits: {self.robot_dof_upper_limits}")
+
         self.robot_dof_effort_limits = torch.zeros_like(self.robot_dof_velocity_limits)
 
         self.robot_dof_pos_targets = torch.zeros(
@@ -470,15 +493,6 @@ class FrankaReachCustomEnv(DirectRLEnv):
         # record the runtime update
         self.runtime += self.step_dt
         self.steps += 1
-        self.cumulative_distance += self.distance_ee_target * self.step_dt
-        self.extras = {
-            "runtime": self.runtime.clone().detach().cpu().numpy(),
-            "steps_to_target": self.steps_to_target.clone().detach().cpu().numpy(),
-            "steps_on_target": self.steps_on_target.clone().detach().cpu().numpy(),
-            "step": self.steps.clone().detach().cpu().numpy(),
-            "success": self.success.clone().detach().cpu().numpy(),
-            "cumulative_distance": self.cumulative_distance.clone().detach().cpu().numpy(),
-        }
 
     def _apply_action(self) -> None:
         """print(f"[INFO]: applying action in control mode '{self.cfg.control}'...")
@@ -531,23 +545,19 @@ class FrankaReachCustomEnv(DirectRLEnv):
         terminated = self.check_termination()
         truncated = self.runtime + 0.0001 >= self.max_episode_length_s
         dones = terminated | truncated
-        if dones.any():
-            self.extras["_final_observation"] = dones
-            self.extras["final_observation"] = [
-                {"policy": obs} for obs in self._get_observations()["policy"]
-            ]
-            self.extras["final_reward"] = self._get_rewards()
-            self.extras["final_info"] = [
-                {
-                    "runtime": self.runtime[i].clone().detach().cpu().numpy(),
-                    "steps_to_target": self.steps_to_target[i].clone().detach().cpu().numpy(),
-                    "steps_on_target": self.steps_on_target[i].clone().detach().cpu().numpy(),
-                    "step": self.steps[i].clone().detach().cpu().numpy(),
-                    "success": self.success[i].clone().detach().cpu().numpy(),
-                    "cumulative_distance": self.cumulative_distance[i].clone().detach().cpu().numpy(),
-                }
-                for i in range(self.num_envs)
-            ]
+        self.cumulative_distance += self.distance_ee_target * self.step_dt
+        self.extras = {
+            "runtime": self.runtime.clone().detach().cpu().numpy(),
+            "steps_to_target": self.steps_to_target.clone().detach().cpu().numpy(),
+            "steps_on_target": self.steps_on_target.clone().detach().cpu().numpy(),
+            "step": self.steps.clone().detach().cpu().numpy(),
+            "success": self.success.clone().detach().cpu().numpy(),
+            "cumulative_distance": self.cumulative_distance.clone()
+            .detach()
+            .cpu()
+            .numpy(),
+        }
+
         return terminated, truncated
 
     def check_termination(self) -> torch.Tensor:
@@ -632,7 +642,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.robot.set_joint_velocity_target(new_joint_vel, env_ids=env_ids)
         self.robot.write_data_to_sim()
 
-        # ! IMPORTANT: running the sim for a very small time step to update robot.data.body_pos_w
+        # ! IMPORTANT: running the sim for a very small time step to update robot.data.body_link_pos_w
         # quite hacky but it works... for now
         self.robot.update(1e-10)
         self.sim._physics_context._physx_sim_interface.simulate(
@@ -646,9 +656,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.robot_dof_pos_targets[env_ids] = self.robot_joint_pos[env_ids]
         self.robot_dof_vel_targets[env_ids] = self.robot_joint_vel[env_ids]
         # update end effector position
-        env_pos = self.robot.data.body_pos_w[env_ids, 0]
-        left_finger_pos = self.robot.data.body_pos_w[env_ids, -2]
-        right_finger_pos = self.robot.data.body_pos_w[env_ids, -1]
+        env_pos = self.robot.data.body_link_pos_w[env_ids, 0]
+        left_finger_pos = self.robot.data.body_link_pos_w[env_ids, -2]
+        right_finger_pos = self.robot.data.body_link_pos_w[env_ids, -1]
         self.robot_ee_pos[env_ids] = (
             0.5 * (left_finger_pos + right_finger_pos) - env_pos
         )
@@ -689,7 +699,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.robot.set_joint_velocity_target(new_joint_vel, env_ids=env_ids)
         self.robot.write_data_to_sim()
 
-        # ! IMPORTANT: running the sim for a very small time step to update robot.data.body_pos_w
+        # ! IMPORTANT: running the sim for a very small time step to update robot.data.body_link_pos_w
         # quite hacky but it works... for now
         self.robot.update(1e-10)
         self.sim._physics_context._physx_sim_interface.simulate(
@@ -703,9 +713,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.robot_dof_pos_targets[env_ids] = self.robot_joint_pos[env_ids]
         self.robot_dof_vel_targets[env_ids] = self.robot_joint_vel[env_ids]
         # update end effector position
-        env_pos = self.robot.data.body_pos_w[env_ids, 0]
-        left_finger_pos = self.robot.data.body_pos_w[env_ids, -2]
-        right_finger_pos = self.robot.data.body_pos_w[env_ids, -1]
+        env_pos = self.robot.data.body_link_pos_w[env_ids, 0]
+        left_finger_pos = self.robot.data.body_link_pos_w[env_ids, -2]
+        right_finger_pos = self.robot.data.body_link_pos_w[env_ids, -1]
         self.robot_ee_pos[env_ids] = (
             0.5 * (left_finger_pos + right_finger_pos) - env_pos
         )
@@ -714,7 +724,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
         """Set the target position to the end effector position."""
 
         # set target pos to end effector pos
-        env_pos = self.robot.data.body_pos_w[env_ids, 0]
+        env_pos = self.robot.data.body_link_pos_w[env_ids, 0]
         new_target_pos = self.robot_ee_pos[env_ids] + env_pos
         new_target_pose = torch.cat(
             (
@@ -727,7 +737,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
         )
         self.target.write_root_pose_to_sim(new_target_pose, env_ids)
         self.target.reset(env_ids)
-        self.target_pos[env_ids] = self.target.data.body_pos_w[env_ids, 0] - env_pos
+        self.target_pos[env_ids] = (
+            self.target.data.body_link_pos_w[env_ids, 0] - env_pos
+        )
 
     def _compute_intermediate_values(
         self, env_ids: Optional[torch.Tensor] = None
@@ -743,25 +755,27 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.robot_joint_tor_applied[env_ids] = self.robot.data.applied_torque[env_ids]
 
         # get each env root pos
-        env_pos = self.robot.data.body_pos_w[env_ids, 0]
+        env_pos = self.robot.data.body_link_pos_w[env_ids, 0]
 
         # end effector position
-        left_finger_pos = self.robot.data.body_pos_w[env_ids, -2]
-        right_finger_pos = self.robot.data.body_pos_w[env_ids, -1]
+        left_finger_pos = self.robot.data.body_link_pos_w[env_ids, -2]
+        right_finger_pos = self.robot.data.body_link_pos_w[env_ids, -1]
         self.robot_ee_pos[env_ids] = (
             0.5 * (left_finger_pos + right_finger_pos) - env_pos
         )
 
         # target state
-        assert self.target.data.body_pos_w.shape[1] == 1
-        self.target_pos[env_ids] = self.target.data.body_pos_w[env_ids, 0] - env_pos
+        assert self.target.data.body_link_pos_w.shape[1] == 1
+        self.target_pos[env_ids] = (
+            self.target.data.body_link_pos_w[env_ids, 0] - env_pos
+        )
 
         self.distance_ee_target[env_ids] = torch.norm(
             self.robot_ee_pos[env_ids] - self.target_pos[env_ids], dim=-1
         )
 
 
-class FrankaEnv(gym.vector.SyncVectorEnv):
+class FrankaEnv(gym.Env):
     def __init__(
         self,
         seed: int = None,
@@ -862,17 +876,6 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
 
     def redo_extras(self, extras: dict):
         extras = copy.deepcopy(extras)
-        if "_final_observation" in extras.keys():
-            extras["final_observation"] = [
-                {
-                    "proprio": obs["policy"][self.obs_indices],
-                    "target": obs["policy"][-3:],
-                }
-                for obs in extras["final_observation"]
-            ]
-
-            ###! CHECK IF THE FINAL INFOS ARE CORRECT !!!
-            # ! this should include "cumulative distance", "success", and "steps to target", "steps on target"
 
         return extras
 
