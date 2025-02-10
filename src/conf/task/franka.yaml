@@ -1,6 +1,8 @@
 type: franka
 num_envs: 32
 num_eval_envs: 0
+steps_per_iteration: ${mul:${task.params.max_episode_steps}, ${task.num_envs}}
+steps_per_evaluation: ${mul:${task.params.max_episode_steps}, ${task.num_envs}}
 params:
   max_episode_steps: 300
   render_mode: rgb_array

@@ -322,6 +322,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.steps_to_target = (
             torch.ones_like(self.runtime, device=self.device) * self.max_episode_steps
         )
+        self.steps_on_target = torch.zeros_like(self.runtime, device=self.device)
+        self.steps = torch.zeros_like(self.runtime, device=self.device)
+        self.cumulative_distance = torch.zeros_like(self.runtime, device=self.device)
         self.success = torch.zeros_like(self.runtime, device=self.device)
         self.extras = {
             "runtime": self.runtime,
@@ -466,10 +469,15 @@ class FrankaReachCustomEnv(DirectRLEnv):
 
         # record the runtime update
         self.runtime += self.step_dt
+        self.steps += 1
+        self.cumulative_distance += self.distance_ee_target * self.step_dt
         self.extras = {
-            "runtime": self.runtime,
-            "steps_to_target": self.steps_to_target,
-            "success": self.success,
+            "runtime": self.runtime.clone().detach().cpu().numpy(),
+            "steps_to_target": self.steps_to_target.clone().detach().cpu().numpy(),
+            "steps_on_target": self.steps_on_target.clone().detach().cpu().numpy(),
+            "step": self.steps.clone().detach().cpu().numpy(),
+            "success": self.success.clone().detach().cpu().numpy(),
+            "cumulative_distance": self.cumulative_distance.clone().detach().cpu().numpy(),
         }
 
     def _apply_action(self) -> None:
@@ -531,8 +539,14 @@ class FrankaReachCustomEnv(DirectRLEnv):
             self.extras["final_reward"] = self._get_rewards()
             self.extras["final_info"] = [
                 {
-                    ###! add time to target and steps to target and sum of distance to target here
+                    "runtime": self.runtime[i].clone().detach().cpu().numpy(),
+                    "steps_to_target": self.steps_to_target[i].clone().detach().cpu().numpy(),
+                    "steps_on_target": self.steps_on_target[i].clone().detach().cpu().numpy(),
+                    "step": self.steps[i].clone().detach().cpu().numpy(),
+                    "success": self.success[i].clone().detach().cpu().numpy(),
+                    "cumulative_distance": self.cumulative_distance[i].clone().detach().cpu().numpy(),
                 }
+                for i in range(self.num_envs)
             ]
         return terminated, truncated
 
@@ -545,7 +559,8 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.success[target_reached] = 1.0
         # update the steps to target only if the target is reached for the first time
         changed = (success_old == 0.0) & (self.success == 1.0)
-        self.steps_to_target[changed] = self.runtime[target_reached] / self.step_dt
+        self.steps_to_target[changed] = self.steps[changed]
+        self.steps_on_target[target_reached] += 1
 
         if self.terminate_on_target:
             return target_reached
@@ -595,6 +610,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.runtime[env_ids] = 0.0
         self.steps_to_target[env_ids] = self.max_episode_steps
         self.success[env_ids] = 0.0
+        self.steps[env_ids] = 0
+        self.cumulative_distance[env_ids] = 0.0
+        self.steps_on_target[env_ids] = 0
 
         # Need to refresh the intermediate values so that _get_observations() can use the latest values
         self._compute_intermediate_values(env_ids)
@@ -854,7 +872,7 @@ class FrankaEnv(gym.vector.SyncVectorEnv):
             ]
 
             ###! CHECK IF THE FINAL INFOS ARE CORRECT !!!
-            # this should include "cumulative distance", "success", and "steps to target", "steps on target"
+            # ! this should include "cumulative distance", "success", and "steps to target", "steps on target"
 
         return extras
 

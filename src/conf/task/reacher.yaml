@@ -1,6 +1,8 @@
 type: reacher
 num_envs: 25
 num_eval_envs: 8
+steps_per_iteration: ${mul:${task.params.max_episode_steps}, ${task.num_envs}}
+steps_per_evaluation: ${mul:${task.params.max_episode_steps}, ${task.num_envs}}
 params:
   max_episode_steps: 200
   render_mode: rgb_array

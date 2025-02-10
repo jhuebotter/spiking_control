@@ -18,6 +18,7 @@ from src.loggers import (
     MediaLogger
 )
 
+OmegaConf.register_new_resolver("mul", lambda a, b: int(a) * int(b))
 
 @hydra.main(version_base='1.3', config_path='src/conf', config_name='config_test')
 def main(cfg : DictConfig) -> None:
