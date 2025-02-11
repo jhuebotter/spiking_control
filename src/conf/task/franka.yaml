@@ -11,5 +11,5 @@ params:
   dof: 3
   # active_joints: [0, 1, 2, 3, 4, 5]
   control: velocity
-  report_sin_cos: false
+  report_sin_cos: true
   report_velocity: false
