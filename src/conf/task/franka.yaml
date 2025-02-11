@@ -4,10 +4,12 @@ num_eval_envs: 0
 steps_per_iteration: ${mul:${task.params.max_episode_steps}, ${task.num_envs}}
 steps_per_evaluation: ${mul:${task.params.max_episode_steps}, ${task.num_envs}}
 params:
-  max_episode_steps: 300
+  max_episode_steps: 200
   render_mode: rgb_array
   dt: 0.02
   render_interval: 1
   dof: 3
   # active_joints: [0, 1, 2, 3, 4, 5]
   control: velocity
+  report_sin_cos: false
+  report_velocity: false

@@ -144,6 +144,7 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
     num_observations_ = 20
     decimation = 1
     control = "position"
+    max_acceleration = 10.0
     joint_stiffness = 400.0
     joint_damping = 80.0
     joint_friction = 1.07
@@ -467,7 +468,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
             )
         elif self.cfg.control == "acceleration":
             # ! action scaling is not known for acceleration control
-            self.robot_dof_acc_targets[:, self.active_joints_idx] = self.actions
+            self.robot_dof_acc_targets[:, self.active_joints_idx] = self.actions * self.cfg.max_acceleration
             self.robot_dof_vel_targets[:, self.active_joints_idx] = (
                 self.robot_dof_vel_targets[:, self.active_joints_idx]
                 # self.robot_joint_vel[:, self.active_joints_idx]
@@ -520,6 +521,8 @@ class FrankaReachCustomEnv(DirectRLEnv):
             / (self.robot_dof_upper_limits - self.robot_dof_lower_limits)
             - 1.0
         )[:, :-2]
+        robot_joint_pos_sin = torch.sin(self.robot_joint_pos)[:, :-2]
+        robot_joint_pos_cos = torch.cos(self.robot_joint_pos)[:, :-2]
         robot_joint_vel_scaled = (
             self.robot_joint_vel / self.robot_dof_velocity_limits
         )[:, :-2]
@@ -527,6 +530,8 @@ class FrankaReachCustomEnv(DirectRLEnv):
         obs = torch.cat(
             (
                 robot_joint_pos_scaled,
+                robot_joint_pos_sin,
+                robot_joint_pos_cos,
                 robot_joint_vel_scaled,
                 self.robot_ee_pos,
                 self.target_pos,
@@ -788,6 +793,10 @@ class FrankaEnv(gym.Env):
         dof: int = 6,
         # active_joints: list[int] = [0, 1, 2, 3, 4, 5],
         control: str = "position",
+        max_acceleration: float = 10.0,
+        report_only_active_joints: bool = True,
+        report_sin_cos: bool = False,
+        report_velocity: bool = False,
         **kwargs,
     ) -> None:
         self.metadata = {
@@ -804,11 +813,13 @@ class FrankaEnv(gym.Env):
         assert 0 < dof <= 7
         active_joints = [i for i in range(dof)]
         self.active_joints = active_joints
-        self.report_only_active_joints = True
-        self.report_velocity = False
+        self.report_only_active_joints = report_only_active_joints
+        self.report_sin_cos = report_sin_cos
+        self.report_velocity = report_velocity
 
         env_cfg = FrankaReachCustomEnvCfg()
         env_cfg.scene.num_envs = num_envs
+        env_cfg.max_acceleration = max_acceleration
         env_cfg.sim.dt = dt
         env_cfg.episode_length_s = max_episode_steps * dt * render_interval
         env_cfg.decimation = render_interval
@@ -822,7 +833,15 @@ class FrankaEnv(gym.Env):
         self.action_space = self._env.action_space
 
         n_joint_obs = len(self.active_joints) if self.report_only_active_joints else 7
-        n_joint_obs *= 2 if self.report_velocity else 1
+        if self.report_sin_cos:
+            n_joint_obs += (
+                2 * len(self.active_joints) if self.report_only_active_joints else 14
+            )
+        if self.report_velocity:
+            n_joint_obs += (
+                len(self.active_joints) if self.report_only_active_joints else 7
+            )
+
         obs_limits = np.tile(
             np.array([1.0] * n_joint_obs + [np.inf] * 3), (num_envs, 1)
         )
@@ -844,17 +863,27 @@ class FrankaEnv(gym.Env):
         if self.report_only_active_joints:
             self.state_labels = [f"joint {i+1} pos" for i in active_joints]
             obs_indices = [i for i in active_joints]
+            if self.report_sin_cos:
+                self.state_labels += [f"joint {i+1} sin" for i in active_joints]
+                self.state_labels += [f"joint {i+1} cos" for i in active_joints]
+                obs_indices += [i + 7 for i in active_joints]
+                obs_indices += [i + 14 for i in active_joints]
             if self.report_velocity:
                 self.state_labels += [f"joint {i+1} vel" for i in active_joints]
-                obs_indices += [i + 7 for i in active_joints]
+                obs_indices += [i + 21 for i in active_joints]
         else:
             self.state_labels = [f"joint {i+1} pos" for i in range(7)]
             obs_indices = [i for i in range(7)]
+            if self.report_sin_cos:
+                self.state_labels += [f"joint {i+1} sin" for i in range(7)]
+                self.state_labels += [f"joint {i+1} cos" for i in range(7)]
+                obs_indices += [i + 7 for i in range(7)]
+                obs_indices += [i + 14 for i in range(7)]
             if self.report_velocity:
                 self.state_labels += [f"joint {i+1} vel" for i in range(7)]
-                obs_indices += [i + 7 for i in range(7)]
+                obs_indices += [i + 21 for i in range(7)]
         self.state_labels += ["hand x", "hand y", "hand z"]
-        obs_indices += [14, 15, 16]
+        obs_indices += [28, 29, 30]
         self.obs_indices = torch.tensor(obs_indices)
 
         self.target_labels = [

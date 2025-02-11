@@ -1,5 +1,5 @@
 defaults:
-  - task: reacher
+  - task: franka
   - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
@@ -65,7 +65,7 @@ task:
 run:
   load_dir: null
   prediction_unroll: 20
-  eval_first: false
+  eval_first: true
   early_stop_metric: "test average reward"
   early_stop_patience: 20
   early_stop_mode: "max"
