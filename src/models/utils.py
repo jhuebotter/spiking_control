@@ -10,7 +10,7 @@ from control_stork.nodes import (
     DirectReadoutGroup,
     TimeAverageReadoutGroup,
 )
-from control_stork.encoders import RBFEncoder
+from control_stork.encoders import RBFEncoder, LinearEncoder, Linear4DEncoder
 from control_stork.connections import Connection, BottleneckLinearConnection
 from control_stork.regularizers import (
     LowerBoundL1,
@@ -235,6 +235,10 @@ def get_encoder_class(type: str = "default") -> torch.nn.Module:
         return None
     elif type == "rbf":
         return RBFEncoder
+    elif type == "linear":
+        return LinearEncoder
+    elif type == "4d":
+        return Linear4DEncoder
     else:
         raise NotImplementedError(f"the encoder {type} is not implemented")
 
