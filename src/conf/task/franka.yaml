@@ -13,3 +13,4 @@ params:
   control: velocity
   report_sin_cos: true
   report_velocity: false
+  max_acceleration: 10.0
