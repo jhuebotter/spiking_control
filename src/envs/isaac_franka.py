@@ -468,7 +468,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
             )
         elif self.cfg.control == "acceleration":
             # ! action scaling is not known for acceleration control
-            self.robot_dof_acc_targets[:, self.active_joints_idx] = self.actions * self.cfg.max_acceleration
+            self.robot_dof_acc_targets[:, self.active_joints_idx] = (
+                self.actions * self.cfg.max_acceleration
+            )
             self.robot_dof_vel_targets[:, self.active_joints_idx] = (
                 self.robot_dof_vel_targets[:, self.active_joints_idx]
                 # self.robot_joint_vel[:, self.active_joints_idx]
@@ -934,6 +936,7 @@ class FrankaEnv(gym.Env):
 
     def close(self):
         self._env.close()
+        simulation_app.close()
 
     def set_test_mode(self, test_mode: bool):
         self._env.set_test_mode(test_mode)
