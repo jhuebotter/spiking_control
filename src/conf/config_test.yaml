@@ -1,5 +1,5 @@
 defaults:
-  - task: franka
+  - task: reacher
   - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
@@ -30,11 +30,11 @@ model:
     bias_mean: 0.0
     scaling: 1
   encoder:
-    type: default
-    kwargs: {}
-      # num_centers: 10
-      # sigma_scale: 1.0
-      # learn_sigma: false
+    type: rbf
+    kwargs:
+      num_centers: 3
+      sigma_scale: 1.0
+      learn_sigma: false
   input:
     scaling: 1.0
     learn_scaling: true 
