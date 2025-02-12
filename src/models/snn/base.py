@@ -98,7 +98,7 @@ class BaseRSNN(torch.nn.Module):
 
         # make the input encoder
         self.input_encoder = input_encoder
-        if self.input_encoder is not None:  # ! TODO: Implement proper parameterization for this
+        if self.input_encoder is not None:
             self.input_dim = self.input_encoder.compute_output_shape(self.input_dim)
 
         # make the model

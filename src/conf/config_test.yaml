@@ -32,8 +32,8 @@ model:
   encoder:
     type: default
     kwargs: {}
-      # num_centers: 3
-      # sigma_scale: 1.0
+      # num_centers: 2
+      # sigma_scale: 0.5
       # learn_sigma: false
   input:
     scaling: 1.0
