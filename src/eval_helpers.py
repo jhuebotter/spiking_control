@@ -108,6 +108,8 @@ def make_predictions(
     pbar = tqdm(np.arange(0, T, step), desc=f"{'rolling out state predictions':30}")
     for t in pbar:
         # make unrolled predictions
+        if t // step >= predictions.shape[0]:
+            break
         transition_model.reset_state()
         for j in range(warmup + unroll):
             if t + j >= T:
