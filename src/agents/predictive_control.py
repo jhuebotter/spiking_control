@@ -320,7 +320,9 @@ class PredictiveControlAgent(BaseAgent):
                 for i, (o, t, a, r, d, no) in enumerate(
                     zip(obs, targets, actions, rewards, dones, next_obs)
                 ):
-                    episodes[i].append(Transition(o, t, a, r, d, no))
+                    # ! This is a hack 
+                    if not d:
+                        episodes[i].append(Transition(o, t, a, r, d, no))
                     if d:
                         # ! This only adds complete episodes to the memory
                         self.memory.append(episodes[i])
@@ -572,7 +574,9 @@ class PredictiveControlAgent(BaseAgent):
                     for i, (o, t, a, r, d, no) in enumerate(
                         zip(obs, targets, actions, rewards, dones, next_obs)
                     ):
-                        episodes[i].append(Transition(o, t, a, r, d, no))
+                        # ! This is a hack 
+                        if not d:
+                            episodes[i].append(Transition(o, t, a, r, d, no))
                         if d:
                             completed_episodes.append(episodes[i])
                             total_reward += episodes[i].get_cumulative_reward()
@@ -596,10 +600,10 @@ class PredictiveControlAgent(BaseAgent):
                     if render and self.manual_video:
                         frames = env.call("render", mode="rgb_array")
                         for i, frame in enumerate(frames):
+                            framestacks[i].append(frame)
                             if dones[i]:
                                 completed_framestacks.append(framestacks[i])
                                 framestacks[i] = FrameStack()
-                            framestacks[i].append(frame)
 
                     # update the state
                     if isinstance(observations["proprio"], torch.Tensor):
