@@ -5,9 +5,7 @@ model:
     dt: ${model.time.dt}
     repeat_input: 8
     out_style: last
-    encoder:
-      type: ${model.encoder.type}
-      kwargs: ${model.encoder.kwargs}
+    encoder: ${model.encoder}
     input:
       type: input
       kwargs: 

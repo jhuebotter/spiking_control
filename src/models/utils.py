@@ -11,6 +11,8 @@ from control_stork.nodes import (
     TimeAverageReadoutGroup,
 )
 from control_stork.encoders import (
+    EncoderStack,
+    IdentityEncoder,
     RBFEncoder,
     LinearEncoder,
     Linear4DEncoder,
@@ -43,6 +45,10 @@ def make_transition_model(
         "num_ff_layers": config.params.get("num_ff_layers", 2),
         **kwargs,
     }
+
+    # make the input encoder
+    params["input_encoder"] = make_input_encoder(config.params.encoder)
+
     if type_ == "prnn":
         model = TransitionNetPRNN
     elif type_ == "rsnn":
@@ -94,6 +100,10 @@ def make_policy_model(
         "num_ff_layers": config.params.get("num_ff_layers", 2),
         **kwargs,
     }
+
+    # make the input encoder
+    params["input_encoder"] = make_input_encoder(config.params.encoder)
+
     if type_ == "prnn":
         model = PolicyNetPRNN
     elif type_ == "rsnn":
@@ -164,14 +174,6 @@ def make_snn_objects(config: DictConfig) -> dict:
         if "latent_bias" in params["connection_kwargs"]:
             del params["connection_kwargs"].latent_bias
 
-    # make the encoder
-    encoder_class = get_encoder_class(config.params.encoder.get("type", "default"))
-    if encoder_class is None:
-        params["input_encoder"] = None
-    else:
-        encoder_kwargs = config.params.encoder.get("kwargs", {})
-        params["input_encoder"] = encoder_class(**encoder_kwargs)
-
     # make the initializer
     params["initializer"] = make_initilizer(
         config.params.initializer.get("type", "default"),
@@ -236,10 +238,29 @@ def make_regularizers(config: DictConfig) -> Union[list, list]:
     return regularizers, w_regularizers
 
 
-def get_encoder_class(type: str = "default") -> torch.nn.Module:
+def make_input_encoder(config: DictConfig) -> EncoderStack:
+    """make the input encoder
+    Args:
+        config (DictConfig): configuration file
+
+    Returns:
+        torch.nn.Module: input encoder
+    """
+
+    encoder_list = []
+    for e in config:
+        type = e.get("type", "default")
+        if type is not None:
+            encoder_class = get_encoder_class(type)
+            encoder_kwargs = e.get("kwargs", {})
+            encoder_list.append(encoder_class(**encoder_kwargs))
+    return EncoderStack(encoder_list)
+
+
+def get_encoder_class(type: str = "default") -> Type[torch.nn.Module]:
     type = type.lower()
-    if type == "default":
-        return None
+    if type == "identity":
+        return IdentityEncoder
     elif type == "rbf":
         return RBFEncoder
     elif type == "linear":
@@ -252,7 +273,7 @@ def get_encoder_class(type: str = "default") -> torch.nn.Module:
         raise NotImplementedError(f"the encoder {type} is not implemented")
 
 
-def get_layer_class(type: str = "default") -> torch.nn.Module:
+def get_layer_class(type: str = "default") -> Type[torch.nn.Module]:
     type = type.lower()
     if type == "default":
         return None

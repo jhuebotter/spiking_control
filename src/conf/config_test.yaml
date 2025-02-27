@@ -28,15 +28,18 @@ model:
     bias_scale: 0.0
     bias_mean: 0.0
     scaling: 1
-  encoder:
-    type: delta
-    kwargs: {}
-      # num_centers: 2
-      # sigma_scale: 0.5
-      # learn_sigma: false
+  encoder: []
+    #- type: identity  # this is also added when the list is empty
+    #- type: delta
+    #- type: linear
+    #- type: rbf
+    #  kwargs:
+    #    num_centers: 2
+    #    sigma_scale: 0.5
+    #    learn_sigma: false
   input:
     scaling: 1.0
-    learn_scaling: true 
+    learn_scaling: false
 
 optimizer:
   type: adam
