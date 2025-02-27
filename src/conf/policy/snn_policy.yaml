@@ -7,7 +7,7 @@ model:
     num_ff_layers: 2
     output:
       kwargs:
-        weight_scale: 0.01
+        weight_scale: 0.1
         output_scale: 1.0
         learn_weight_scale: true
         learn_output_scale: false
@@ -25,5 +25,6 @@ optimizer:
 
 learning:
   params:
+    relative_l2_weight: 0.5
     unroll_steps: 20
     deterministic_transition: True

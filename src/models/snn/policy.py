@@ -81,16 +81,17 @@ class PolicyNetRSNN(BaseRSNN):
         )
 
     def criterion(
-        self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None
+        self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None, relative_l2_weight: float = 1.0
     ) -> Tensor:
         if loss_gain is None:
             return torch.nn.functional.mse_loss(target, y_hat)
         use = torch.tensor(loss_gain["use"], device=self.device)
         gain = torch.tensor(loss_gain["gain"], device=self.device)
 
-        # ! This is the original code - why was target sliced?
-        # return torch.mean(torch.pow(target[:, use] - y_hat[:, use], 2) * gain)
-        return torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
+        L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
+        L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]) * gain) 
+        loss = relative_l2_weight * L2_loss_term + (1 - relative_l2_weight) * L1_loss_term
+        return loss
 
     def train_fn(
         self,
@@ -100,6 +101,9 @@ class PolicyNetRSNN(BaseRSNN):
         batch_size: int = 128,
         warmup_steps: int = 5,
         unroll_steps: int = 20,
+        action_reg_weight: float = 0.0,
+        action_smoothness_reg_weight: float = 0.0,
+        relative_l2_weight: float = 1.0,
         max_norm: Optional[float] = None,
         deterministic_transition: bool = False,
         record: bool = False,
@@ -141,6 +145,7 @@ class PolicyNetRSNN(BaseRSNN):
         target = targets[-1]
 
         # unroll the model
+        action_hats = []
         for i in range(unroll_steps):
             action_hat = self(new_state_hat, target, record=record)
             new_state_delta_hat = transition_model(
@@ -148,13 +153,18 @@ class PolicyNetRSNN(BaseRSNN):
             )
             new_state_hat = new_state_hat + new_state_delta_hat
             policy_loss += self.criterion(
-                target, new_state_hat.squeeze(0), loss_gain=loss_gain
+                target, new_state_hat.squeeze(0), loss_gain=loss_gain, relative_l2_weight=relative_l2_weight
             )
+            action_hats.append(action_hat)
+        action_hats = torch.stack(action_hats, dim=1)
 
         # compute the loss
         policy_loss = policy_loss / unroll_steps
         reg_loss = self.get_reg_loss()
-        loss = policy_loss + reg_loss
+        action_reg_loss = action_hats.abs().mean() * action_reg_weight
+        action_diff = action_hats[:, 1:] - action_hats[:, :-1]
+        action_smoothness_reg_loss = action_diff.abs().mean() * action_smoothness_reg_weight
+        loss = policy_loss + reg_loss + action_reg_loss + action_smoothness_reg_loss
 
         # update the model
         loss.backward()
@@ -169,6 +179,8 @@ class PolicyNetRSNN(BaseRSNN):
             "loss": loss.item(),
             "policy loss": policy_loss.item(),
             "reg loss": reg_loss.item(),
+            "action reg loss": action_reg_loss.item(),
+            "action smoothness reg loss": action_smoothness_reg_loss.item(),
             "grad norm": grad_norm,
             "clipped grad norm": clipped_grad_norm,
         }

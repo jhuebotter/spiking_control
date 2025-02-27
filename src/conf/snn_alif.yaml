@@ -33,10 +33,10 @@ model:
         tau_syn: ${model.time.tau_syn}
         n_readouts: 25
     connection:
-      n_dims: ${model.connection.n_dims}
       kwargs:
         bias: true
         n_dims: ${model.connection.n_dims}
+        latent_bias: ${model.connection.latent_bias}
     initializer:
       type: normal
       kwargs:

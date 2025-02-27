@@ -10,7 +10,12 @@ from control_stork.nodes import (
     DirectReadoutGroup,
     TimeAverageReadoutGroup,
 )
-from control_stork.encoders import RBFEncoder, LinearEncoder, Linear4DEncoder
+from control_stork.encoders import (
+    RBFEncoder,
+    LinearEncoder,
+    Linear4DEncoder,
+    DeltaEncoder,
+)
 from control_stork.connections import Connection, BottleneckLinearConnection
 from control_stork.regularizers import (
     LowerBoundL1,
@@ -151,11 +156,13 @@ def make_snn_objects(config: DictConfig) -> dict:
 
     # get the connection type
     params["connection_type"] = get_connection_class(
-        config.params.connection.get("n_dims", None)
+        config.params.connection.get("kwargs", {}).get("n_dims", None)
     )
     params["connection_kwargs"] = config.params.connection.get("kwargs", {})
     if params["connection_kwargs"].get("n_dims", 0) in [0, None, "None"]:
         del params["connection_kwargs"].n_dims
+        if "latent_bias" in params["connection_kwargs"]:
+            del params["connection_kwargs"].latent_bias
 
     # make the encoder
     encoder_class = get_encoder_class(config.params.encoder.get("type", "default"))
@@ -239,6 +246,8 @@ def get_encoder_class(type: str = "default") -> torch.nn.Module:
         return LinearEncoder
     elif type == "4d":
         return Linear4DEncoder
+    elif type == "delta":
+        return DeltaEncoder
     else:
         raise NotImplementedError(f"the encoder {type} is not implemented")
 

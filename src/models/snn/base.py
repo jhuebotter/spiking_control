@@ -333,6 +333,7 @@ class BaseRSNN(torch.nn.Module):
         self.state_initialized = False
 
     def init_state(self, batch_size: int = 1) -> None:
+        self.input_encoder.reset()
         self.model.reset_state(batch_size)
         self.state_initialized = True
 

@@ -6,7 +6,7 @@ defaults:
   - logging: logging
   - _self_
 
-seed: 4
+seed: 888
 experiment: test
 device: cuda
 
@@ -17,12 +17,11 @@ model:
     tau_syn: 0.01
   activation:
     type: sigmoidspike
-    beta: 25
+    beta: 50
   connection:
     n_dims: null
-  hidden_dim: 
-    - 1024
-    - 512
+    latent_bias: false
+  hidden_dim: 1000
   initializer:
     sigma_u: 1.0
     nu: 75
@@ -30,7 +29,7 @@ model:
     bias_mean: 0.0
     scaling: 1
   encoder:
-    type: default
+    type: delta
     kwargs: {}
       # num_centers: 2
       # sigma_scale: 0.5
@@ -74,6 +73,12 @@ run:
   teacher_forcing_decay: 1.0
   action_noise_std: 0.0
   action_noise_decay: 1.0
+  action_reg_weight_start: 0.0
+  action_reg_weight_end: 0.01
+  action_reg_weight_warmup_steps: 20
+  action_smoothness_reg_weight_start: 0.0
+  action_smoothness_reg_weight_end: 0.01
+  action_smoothness_reg_weight_warmup_steps: 20
   iterations: 100
 
 plotting:

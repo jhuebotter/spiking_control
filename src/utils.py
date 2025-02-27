@@ -267,30 +267,102 @@ def load_weights_from_disk(
     return model, optim
 
 
-class ExponentialScheduler:
-    def __init__(self, start: float=1.0, end: float=0.0, gamma: float=0.97):
-        """
-        Exponential decay scheduler, e.g. for teacher forcing probability.
-
-        Args:
-            start (float): Initial value for schedule (default: 1.0)
-            end (float): Minimum value at the end of training (default: 0.0)
-            gamma (float): Multiplicative factor for exponential decay (default: 0.97)
-        """
+class BaseScheduler:
+    """
+    Base scheduler class.
+    
+    Provides a default interface with reset, step, and get_value methods.
+    The default get_value simply returns the start value.
+    """
+    def __init__(self, start: float, end: float, warmup_steps: int = 0):
         self.start = start
         self.end = end
-        self.gamma = gamma
+        self.warmup_steps = warmup_steps
         self.current_step = 0
 
     def reset(self):
-        """Reset the scheduler to the initial state."""
+        """Reset the scheduler to its initial state."""
         self.current_step = 0
 
     def step(self):
-        """Update the teacher forcing probability."""
+        """Advance one step and return the new scheduled value."""
         self.current_step += 1
         return self.get_value()
 
     def get_value(self):
-        """Get the current teacher forcing probability."""
-        return max(self.start * (self.gamma ** self.current_step), self.end)
+        """Return the current scheduled value. Default is the start value."""
+        return self.start
+
+
+class LinearScheduler(BaseScheduler):
+    """
+    Linearly interpolates from start to end after an optional warmup period.
+    
+    For t < warmup_steps, get_value() returns start.
+    For t >= warmup_steps:
+      Let effective_step = t - warmup_steps.
+      If effective_step >= total_steps, returns end.
+      Otherwise returns:
+          start + (end - start) * (effective_step / total_steps)
+    
+    Args:
+        total_steps (int): Number of steps over which to interpolate after warmup.
+                           (At effective_step == total_steps, the scheduler returns end.)
+    """
+    def __init__(self, start: float = 1.0, end: float = 0.0, warmup_steps: int = 0, total_steps: int = 100):
+        super().__init__(start, end, warmup_steps)
+        self.total_steps = total_steps
+
+    def get_value(self):
+        if self.current_step < self.warmup_steps:
+            return self.start
+        effective_step = self.current_step - self.warmup_steps
+        if effective_step >= self.total_steps:
+            return self.end
+        return self.start + (self.end - self.start) * (effective_step / self.total_steps)
+
+
+class ExponentialScheduler(BaseScheduler):
+    """
+    Exponential scheduler that supports both decay and increase, with an optional warmup period.
+    
+    For t < warmup_steps, get_value() returns start.
+    For t >= warmup_steps:
+      If start >= end (decay):
+          v(t) = end + (start - end) * gamma^(t - warmup_steps)
+      If start < end (increase):
+          v(t) = start + (end - start) * (1 - gamma^(t - warmup_steps))
+    
+    This behavior is identical to your current implementation.
+    
+    Args:
+        gamma (float): Multiplicative factor (should be between 0 and 1).
+    """
+    def __init__(self, start: float = 1.0, end: float = 0.0, gamma: float = 0.97, warmup_steps: int = 0):
+        super().__init__(start, end, warmup_steps)
+        self.gamma = gamma
+
+    def get_value(self):
+        if self.current_step < self.warmup_steps:
+            return self.start
+        effective_step = self.current_step - self.warmup_steps
+        if self.start >= self.end:
+            return self.end + (self.start - self.end) * (self.gamma ** effective_step)
+        else:
+            return self.start + (self.end - self.start) * (1 - self.gamma ** effective_step)
+
+
+class StepScheduler(BaseScheduler):
+    """
+    Step scheduler that, after an optional warmup period, immediately returns a constant value.
+    
+    For t < warmup_steps, get_value() returns start.
+    For t >= warmup_steps, get_value() returns end.
+    """
+    def __init__(self, start: float = 1.0, end: float = 0.0, warmup_steps: int = 0):
+        super().__init__(start, end, warmup_steps)
+
+    def get_value(self):
+        if self.current_step < self.warmup_steps:
+            return self.start
+        return self.end

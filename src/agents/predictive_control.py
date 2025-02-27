@@ -1,7 +1,7 @@
 from . import BaseAgent
 from src.memory import EpisodeMemory, Transition, Episode
 from src.models import make_transition_model, make_policy_model
-from ..utils import make_optimizer, dict_mean, FrameStack, ExponentialScheduler
+from ..utils import make_optimizer, dict_mean, FrameStack, ExponentialScheduler, StepScheduler
 from src.eval_helpers import baseline_prediction
 
 import gymnasium as gym
@@ -121,6 +121,18 @@ class PredictiveControlAgent(BaseAgent):
             gamma=self.run_config.get("action_noise_decay", 1.0),
         )
 
+        # make a action reg weight scheduler
+        self.policy_model_action_reg_weight_scheduler = StepScheduler(
+            start=self.run_config.get("action_reg_weight_start", 0.0),
+            end=self.run_config.get("action_reg_weight_end", 0.0),
+            warmup_steps=self.run_config.get("action_reg_weight_warmup_steps", 0),
+        )
+        self.policy_model_action_smoothness_reg_weight_scheduler = StepScheduler(
+            start=self.run_config.get("action_smoothness_reg_weight_start", 0.0),
+            end=self.run_config.get("action_smoothness_reg_weight_end", 0.0),
+            warmup_steps=self.run_config.get("action_smoothness_reg_weight_warmup_steps", 0),
+        )
+
         # wrap the environment with a video recorder if needed
         if hasattr(self.env.unwrapped, "manual_video"):
             self.manual_video = self.env.unwrapped.manual_video
@@ -179,6 +191,8 @@ class PredictiveControlAgent(BaseAgent):
         policy_lr = self.policy_model_lr_scheduler.get_last_lr()[0]
         transition_teacher_forcing_p = self.transition_model_tf_scheduler.get_value()
         policy_noise_std = self.policy_model_noise_scheduler.get_value()
+        action_reg_weight = self.policy_model_action_reg_weight_scheduler.get_value()
+        action_smoothness_reg_weight = self.policy_model_action_smoothness_reg_weight_scheduler.get_value()
         # log them
         self.log(
             {
@@ -186,6 +200,8 @@ class PredictiveControlAgent(BaseAgent):
                 "policy model learning rate": policy_lr,
                 "transition model teacher forcing p": transition_teacher_forcing_p,
                 "policy model noise std": policy_noise_std,
+                "policy model action reg weight": action_reg_weight,
+                "policy model action smoothness reg weight": action_smoothness_reg_weight,
             },
             step=self.epochs,
         )
@@ -194,6 +210,8 @@ class PredictiveControlAgent(BaseAgent):
         self.policy_model_lr_scheduler.step()
         self.transition_model_tf_scheduler.step()
         self.policy_model_noise_scheduler.step()
+        self.policy_model_action_reg_weight_scheduler.step()
+        self.policy_model_action_smoothness_reg_weight_scheduler.step()
 
     def check_early_stop(self, test_results):
 
@@ -421,6 +439,8 @@ class PredictiveControlAgent(BaseAgent):
     def train_policy_model(self):
 
         # train the policy model
+        action_reg_weight = self.policy_model_action_reg_weight_scheduler.get_value()
+        action_smoothness_reg_weight = self.policy_model_action_smoothness_reg_weight_scheduler.get_value()
         policy_results = []
         n_policy_batches = self.policy_config.learning.get("batches_per_iteration", 1)
         pbar = tqdm(range(n_policy_batches), desc=f"{'training policy model':30}")
@@ -429,6 +449,8 @@ class PredictiveControlAgent(BaseAgent):
                 memory=self.memory,
                 transition_model=self.transition_model,
                 loss_gain=self.env.unwrapped.call("get_loss_gain")[0],
+                action_reg_weight=action_reg_weight,
+                action_smoothness_reg_weight=action_smoothness_reg_weight,
                 record=True,
                 excluded_monitor_keys=self.policy_model.plot_monitors,
                 **self.policy_config.get("learning", {}).get("params", {}),
