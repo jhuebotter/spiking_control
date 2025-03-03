@@ -9,7 +9,7 @@ model:
       kwargs:
         weight_scale: 0.1
         output_scale: 1.0
-        learn_weight_scale: true
+        learn_weight_scale: false
         learn_output_scale: false
         apply_tanh: true
     regularization:
@@ -25,6 +25,6 @@ optimizer:
 
 learning:
   params:
-    relative_l2_weight: 0.5
+    relative_l2_weight: 1.0
     unroll_steps: 20
     deterministic_transition: True

@@ -25,7 +25,7 @@ from control_stork.plotting import plot_spikes, plot_traces
 from control_stork.activations import SigmoidSpike
 from control_stork.layers import Layer
 from src.extratypes import *
-    
+
 
 class BaseRSNN(torch.nn.Module):
     """Base class for spiking models with a hidden state."""
@@ -319,7 +319,11 @@ class BaseRSNN(torch.nn.Module):
         self.optimizer = None
         self.state_initialized = False
 
-        self.numeric_monitors = ["PopulationSpikeCountMonitor", "ActiveNeuronMonitor", "PropertyMonitor"]
+        self.numeric_monitors = [
+            "PopulationSpikeCountMonitor",
+            "ActiveNeuronMonitor",
+            "PropertyMonitor",
+        ]
         self.plot_monitors = ["PlotStateMonitor"]
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
@@ -372,11 +376,11 @@ class BaseRSNN(torch.nn.Module):
             x = x.unsqueeze(0)
         # control stork networks want (N, T, D)
         return x.transpose(0, 1)
-    
+
     def step(self, x: Tensor, record: bool = False) -> Tensor:
         """perform a single step of the model"""
         return self.output_activation(self.model(x, record=record))
-    
+
     def output_activation(self, x: Tensor) -> Tensor:
         """apply the output activation function, but tanh is already applied in DirectReadoutGroup"""
         return x

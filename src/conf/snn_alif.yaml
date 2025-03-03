@@ -29,7 +29,7 @@ model:
       kwargs:
         tau_mem: ${model.time.tau_mem}
         tau_syn: ${model.time.tau_syn}
-        n_readouts: 25
+        n_readouts: 1
     connection:
       kwargs:
         bias: true
@@ -54,13 +54,13 @@ model:
             strength: ${LowerBoundL2.strength}
             threshold: ${LowerBoundL2.threshold}
             basis: ${LowerBoundL2.basis}
-            dims: null
+            dims: ${LowerBoundL2.dims}
         - type: UpperBoundL2
           kwargs:
             strength: ${UpperBoundL2.strength}
             threshold: ${UpperBoundL2.threshold}
             basis: ${UpperBoundL2.basis}
-            dims: 1
+            dims: ${UpperBoundL2.dims}
       weights:
       - type: L2
         kwargs:

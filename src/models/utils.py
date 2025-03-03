@@ -116,6 +116,21 @@ def make_policy_model(
                 "out_style": config.params.get("out_style", "last"),
             }
         )
+        # add an additional regularizer for the output layer if tanh activation is used
+        if params["output_kwargs"].get("apply_tanh", None) == True:
+            params["output_kwargs"].update(
+                {
+                    "regularizers": [
+                        LowerBoundL2(
+                            strength=1e-4, threshold=-3.0, basis="mem", dims=None
+                        ),
+                        UpperBoundL2(
+                            strength=1e-4, threshold=3.0, basis="mem", dims=None
+                        ),
+                    ],
+                    "store_sequences": ["out", "mem"],
+                }
+            )
     else:
         raise NotImplementedError(f"the policy model {type_} is not implemented")
 
@@ -154,7 +169,7 @@ def make_snn_objects(config: DictConfig) -> dict:
     params["input_kwargs"] = config.params.input.get("kwargs", {})
     params["neuron_kwargs"] = config.params.neuron.get("kwargs", {})
     params["readout_kwargs"] = config.params.readout.get("kwargs", {})
-    params["output_kwargs"] = config.params.output.get("kwargs", {})
+    params["output_kwargs"] = {**config.params.output.get("kwargs", {})}
 
     # make the activation function
     params["activation"] = make_act_fn(
