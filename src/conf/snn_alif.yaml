@@ -38,6 +38,7 @@ model:
     initializer:
       type: normal
       kwargs:
+        mu_u: ${model.initializer.mu_u}
         time_step: ${model.time.dt}
         sigma_u: ${model.initializer.sigma_u}
         nu: ${model.initializer.nu}

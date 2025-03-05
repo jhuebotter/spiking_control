@@ -7,7 +7,7 @@ model:
     num_ff_layers: 2
     output:
       kwargs:
-        weight_scale: 0.1
+        weight_scale: 0.5
         output_scale: 1.0
         learn_weight_scale: false
         learn_output_scale: false

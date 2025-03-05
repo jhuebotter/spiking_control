@@ -336,7 +336,7 @@ def make_initilizer(type: str = "default", **kwargs) -> initializers.Initializer
     elif type == "constant":
         return initializers.ConstantInitializer(**kwargs)
     elif type == "normal":
-        return initializers.FluctuationDrivenCenteredNormalInitializer(**kwargs)
+        return initializers.FluctuationDrivenNormalInitializer(**kwargs)
     else:
         raise NotImplementedError(f"the initializer {type} is not implemented")
 

@@ -12,7 +12,7 @@ from control_stork.nodes import (
 from control_stork.connections import Connection
 from control_stork.initializers import (
     Initializer,
-    FluctuationDrivenCenteredNormalInitializer,
+    FluctuationDrivenNormalInitializer,
     AverageInitializer,
 )
 from control_stork.monitors import (
@@ -51,8 +51,8 @@ class BaseRSNN(torch.nn.Module):
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
-        initializer: Initializer = FluctuationDrivenCenteredNormalInitializer(
-            nu=200, sigma_u=1.0, time_step=1e-3
+        initializer: Initializer = FluctuationDrivenNormalInitializer(
+            mu_u=0.0, nu=200, sigma_u=1.0, time_step=1e-3
         ),
         regularizers: list = [],
         w_regularizers: list = [],

@@ -65,7 +65,7 @@ def main(cfg : DictConfig) -> None:
     # make a pandas logger
     if cfg.logging.pandas.use:
         print('pandas logger is used!')
-        loggers.append(PandasLogger(out_dir))
+        loggers.append(PandasLogger(out_dir, cfg=cfg))
 
     # make an experiment pandas logger
     if cfg.logging.pandas.use:

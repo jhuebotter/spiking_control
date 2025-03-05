@@ -23,9 +23,10 @@ model:
     latent_bias: false
   hidden_dim: 1000
   initializer:
+    mu_u: 0.0
     sigma_u: 1.0
     nu: 50
-    bias_scale: 0.0
+    bias_scale: 1.0
     bias_mean: 0.0
     scaling: 1
   encoder:
@@ -39,7 +40,7 @@ model:
     #    sigma_scale: 0.5
     #    learn_sigma: false
   input:
-    scaling: 1.0
+    scaling: 0.3
     learn_scaling: false
 
 optimizer:
@@ -48,14 +49,14 @@ optimizer:
     lr: 0.001
 
 LowerBoundL2:
-  strength: 0.0
-  threshold: 0.01
-  basis: out
+  strength: 0.0001
+  threshold: -10
+  basis: mem
   dims: null   # null means per neuron, 1 means avg per layer
 UpperBoundL2:
-  strength: 0.0
-  threshold: 0.4
-  basis: out
+  strength: 0.0001
+  threshold: 10
+  basis: mem
   dims: null
 transition:
   wl2: 0.0
@@ -68,13 +69,13 @@ task:
     full_target_obs: false
 
 run:
-  encoder1: delta
+  encoder1: linear
   encoder2: identity
   load_dir: null
   prediction_unroll: 20
   eval_first: true
   early_stop_metric: "test average reward"
-  early_stop_patience: 20
+  early_stop_patience: 30
   early_stop_mode: "max"
   lr_decay: 0.97
   teacher_forcing_p: 1.0
@@ -87,7 +88,7 @@ run:
   action_smoothness_reg_weight_start: 0.0
   action_smoothness_reg_weight_end: 0.0
   action_smoothness_reg_weight_warmup_steps: 20
-  iterations: 100
+  iterations: 160
 
 plotting:
   render_every: 10
@@ -99,4 +100,4 @@ learning:
 
 hydra:
   run:
-    dir: ./outputs/${now:%Y-%m-%d}/${now:%H-%M-%S-%f}
+    dir: ./outputs/${experiment}/${now:%Y-%m-%d}/${now:%H-%M-%S-%f}
