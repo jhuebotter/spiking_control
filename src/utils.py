@@ -282,7 +282,12 @@ class BaseScheduler:
 
     def reset(self):
         """Reset the scheduler to its initial state."""
-        self.current_step = 0
+        self.set_step(0)
+
+    def set_step(self, step: int):
+        """Set the current step to the given value."""
+        assert step >= 0, "Step must be a non-negative integer."
+        self.current_step = step
 
     def step(self):
         """Advance one step and return the new scheduled value."""
@@ -366,3 +371,53 @@ class StepScheduler(BaseScheduler):
         if self.current_step < self.warmup_steps:
             return self.start
         return self.end
+    
+
+class LRSchedulerWrapper:
+    """
+    A learning rate scheduler wrapper that updates the optimizer's learning rates using a custom scheduler.
+
+    This wrapper takes an optimizer and a scheduler instance (a subclass of BaseScheduler). 
+    On each step, it calls the scheduler to obtain the new learning rate(s) and updates each parameter 
+    group in the optimizer accordingly. The scheduler's get_value() method is still available for logging.
+
+    It supports both scalar and list-like inputs for start, end, and decay parameters.
+    """
+    def __init__(self, optimizer: torch.optim.Optimizer, scheduler: BaseScheduler):
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        
+        # Initialize each parameter group's learning rate based on the scheduler's starting value.
+        initial_lr = self.scheduler.get_value()
+        if isinstance(initial_lr, (int, float)):
+            for group in self.optimizer.param_groups:
+                group["lr"] = initial_lr
+        else:
+            # Assume iterable: assign each corresponding parameter group.
+            for group, lr in zip(self.optimizer.param_groups, initial_lr):
+                group["lr"] = lr
+
+    def step(self, epoch: int = None) -> Union[float, List[float]]:
+        """
+        Advance the scheduler one step, update the optimizer's learning rates,
+        and return the new learning rate(s).
+        """
+        if epoch is not None:
+            self.scheduler.set_step(epoch)
+        else:
+            self.scheduler.step()
+
+        new_lr = self.scheduler.get_value()
+        if isinstance(new_lr, (int, float)):
+            for group in self.optimizer.param_groups:
+                group["lr"] = new_lr
+        else:
+            for group, lr in zip(self.optimizer.param_groups, new_lr):
+                group["lr"] = lr
+        return new_lr
+
+    def get_value(self) -> Union[float, List[float]]:
+        """
+        Return the current learning rate(s) computed by the underlying scheduler.
+        """
+        return self.scheduler.get_value()

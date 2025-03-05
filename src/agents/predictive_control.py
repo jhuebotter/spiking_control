@@ -1,12 +1,11 @@
 from . import BaseAgent
 from src.memory import EpisodeMemory, Transition, Episode
 from src.models import make_transition_model, make_policy_model
-from ..utils import make_optimizer, dict_mean, FrameStack, ExponentialScheduler, StepScheduler
+from ..utils import make_optimizer, dict_mean, FrameStack, ExponentialScheduler, StepScheduler, LRSchedulerWrapper
 from src.eval_helpers import baseline_prediction
 
 import gymnasium as gym
 import torch
-from torch.optim.lr_scheduler import ExponentialLR
 from omegaconf import DictConfig
 from tqdm import tqdm
 from typing import Optional
@@ -101,12 +100,24 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # make a learning rate scheduler
-        self.transition_model_lr_scheduler = ExponentialLR(
-            self.transition_model.optimizer, gamma=self.run_config.get("lr_decay", 1.0)
+        transition_model_lr_scheduler = ExponentialScheduler(
+            start=self.transition_config.optimizer.params.get("lr", 1e-3),
+            end=self.run_config.get("lr_end", 0),
+            gamma=self.run_config.get("lr_decay", 1.0),
+            warmup_steps=self.run_config.get("lr_warmup_steps", 0),
+        )
+        self.transition_model_lr_scheduler = LRSchedulerWrapper(
+            transition_model_lr_scheduler, self.transition_model.optimizer
         )
 
-        self.policy_model_lr_scheduler = ExponentialLR(
-            self.policy_model.optimizer, gamma=self.run_config.get("lr_decay", 1.0)
+        policy_model_lr_scheduler = ExponentialScheduler(
+            start=self.policy_config.optimizer.params.get("lr", 1e-3),
+            end=self.run_config.get("lr_end", 0),
+            gamma=self.run_config.get("lr_decay", 1.0),
+            warmup_steps=self.run_config.get("lr_warmup_steps", 0),
+        )
+        self.policy_model_lr_scheduler = LRSchedulerWrapper(
+            policy_model_lr_scheduler, self.policy_model.optimizer
         )
 
         # make a teacher forcing scheduler

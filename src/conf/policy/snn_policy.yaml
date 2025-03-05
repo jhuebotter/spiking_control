@@ -21,7 +21,7 @@ model:
 optimizer:
   type: ${optimizer.type}
   params:
-    lr: 0.004
+    lr: 0.002
 
 learning:
   params:
