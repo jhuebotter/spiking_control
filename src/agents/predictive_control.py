@@ -1,7 +1,14 @@
 from . import BaseAgent
 from src.memory import EpisodeMemory, Transition, Episode
 from src.models import make_transition_model, make_policy_model
-from ..utils import make_optimizer, dict_mean, FrameStack, ExponentialScheduler, StepScheduler, LRSchedulerWrapper
+from ..utils import (
+    make_optimizer,
+    dict_mean,
+    FrameStack,
+    ExponentialScheduler,
+    StepScheduler,
+    LRSchedulerWrapper,
+)
 from src.eval_helpers import baseline_prediction
 
 import gymnasium as gym
@@ -107,7 +114,7 @@ class PredictiveControlAgent(BaseAgent):
             warmup_steps=self.run_config.get("lr_warmup_steps", 0),
         )
         self.transition_model_lr_scheduler = LRSchedulerWrapper(
-            transition_model_lr_scheduler, self.transition_model.optimizer
+            self.transition_model.optimizer, transition_model_lr_scheduler
         )
 
         policy_model_lr_scheduler = ExponentialScheduler(
@@ -117,12 +124,13 @@ class PredictiveControlAgent(BaseAgent):
             warmup_steps=self.run_config.get("lr_warmup_steps", 0),
         )
         self.policy_model_lr_scheduler = LRSchedulerWrapper(
-            policy_model_lr_scheduler, self.policy_model.optimizer
+            self.policy_model.optimizer, policy_model_lr_scheduler
         )
 
         # make a teacher forcing scheduler
         self.transition_model_tf_scheduler = ExponentialScheduler(
             self.run_config.get("teacher_forcing_p", 1.0),
+            warmup_steps=self.run_config.get("teacher_forcing_warmup_steps", 0),
             gamma=self.run_config.get("teacher_forcing_decay", 1.0),
         )
 
@@ -141,7 +149,9 @@ class PredictiveControlAgent(BaseAgent):
         self.policy_model_action_smoothness_reg_weight_scheduler = StepScheduler(
             start=self.run_config.get("action_smoothness_reg_weight_start", 0.0),
             end=self.run_config.get("action_smoothness_reg_weight_end", 0.0),
-            warmup_steps=self.run_config.get("action_smoothness_reg_weight_warmup_steps", 0),
+            warmup_steps=self.run_config.get(
+                "action_smoothness_reg_weight_warmup_steps", 0
+            ),
         )
 
         # wrap the environment with a video recorder if needed
@@ -198,12 +208,14 @@ class PredictiveControlAgent(BaseAgent):
     def step_scheduler(self):
 
         # first get the current parameters from the schedulers
-        transition_lr = self.transition_model_lr_scheduler.get_last_lr()[0]
-        policy_lr = self.policy_model_lr_scheduler.get_last_lr()[0]
+        transition_lr = self.transition_model_lr_scheduler.get_value()
+        policy_lr = self.policy_model_lr_scheduler.get_value()
         transition_teacher_forcing_p = self.transition_model_tf_scheduler.get_value()
         policy_noise_std = self.policy_model_noise_scheduler.get_value()
         action_reg_weight = self.policy_model_action_reg_weight_scheduler.get_value()
-        action_smoothness_reg_weight = self.policy_model_action_smoothness_reg_weight_scheduler.get_value()
+        action_smoothness_reg_weight = (
+            self.policy_model_action_smoothness_reg_weight_scheduler.get_value()
+        )
         # log them
         self.log(
             {
@@ -349,7 +361,7 @@ class PredictiveControlAgent(BaseAgent):
                 for i, (o, t, a, r, d, no) in enumerate(
                     zip(obs, targets, actions, rewards, dones, next_obs)
                 ):
-                    # ! This is a hack 
+                    # ! This is a hack
                     if not d:
                         episodes[i].append(Transition(o, t, a, r, d, no))
                     if d:
@@ -451,7 +463,9 @@ class PredictiveControlAgent(BaseAgent):
 
         # train the policy model
         action_reg_weight = self.policy_model_action_reg_weight_scheduler.get_value()
-        action_smoothness_reg_weight = self.policy_model_action_smoothness_reg_weight_scheduler.get_value()
+        action_smoothness_reg_weight = (
+            self.policy_model_action_smoothness_reg_weight_scheduler.get_value()
+        )
         policy_results = []
         n_policy_batches = self.policy_config.learning.get("batches_per_iteration", 1)
         pbar = tqdm(range(n_policy_batches), desc=f"{'training policy model':30}")
@@ -607,7 +621,7 @@ class PredictiveControlAgent(BaseAgent):
                     for i, (o, t, a, r, d, no) in enumerate(
                         zip(obs, targets, actions, rewards, dones, next_obs)
                     ):
-                        # ! This is a hack 
+                        # ! This is a hack
                         if not d:
                             episodes[i].append(Transition(o, t, a, r, d, no))
                         if d:

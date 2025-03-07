@@ -84,12 +84,14 @@ class PolicyNetRSNN(BaseRSNN):
         self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None, relative_l2_weight: float = 1.0
     ) -> Tensor:
         if loss_gain is None:
-            return torch.nn.functional.mse_loss(target, y_hat)
-        use = torch.tensor(loss_gain["use"], device=self.device)
-        gain = torch.tensor(loss_gain["gain"], device=self.device)
+            L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2))
+            L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]))
+        else:
+            use = torch.tensor(loss_gain["use"], device=self.device)
+            gain = torch.tensor(loss_gain["gain"], device=self.device)
 
-        L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
-        L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]) * gain) 
+            L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
+            L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]) * gain) 
         loss = relative_l2_weight * L2_loss_term + (1 - relative_l2_weight) * L1_loss_term
         return loss
 

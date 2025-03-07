@@ -3,8 +3,8 @@ defaults:
 
 model:
   params:
-    num_rec_layers: 0
-    num_ff_layers: 2
+    num_rec_layers: 1
+    num_ff_layers: 1
     output:
       kwargs:
         weight_scale: 0.5
@@ -25,6 +25,5 @@ optimizer:
 
 learning:
   params:
-    relative_l2_weight: 1.0
     unroll_steps: 20
     deterministic_transition: True

@@ -77,8 +77,11 @@ class TransitionNetRSNN(BaseRSNN):
             **kwargs,
         )
 
-    def criterion(self, y_hat: Tensor, y: Tensor) -> Tensor:
-        return torch.nn.functional.mse_loss(y_hat, y)
+    def criterion(self, y_hat: Tensor, y: Tensor, relative_l2_weight: float = 1.0) -> Tensor:
+        L2_loss_term = torch.mean(torch.pow(y - y_hat, 2))
+        L1_loss_term = torch.mean(torch.abs(y - y_hat)) 
+        loss = relative_l2_weight * L2_loss_term + (1 - relative_l2_weight) * L1_loss_term
+        return loss
 
     def train_fn(
         self,
@@ -87,6 +90,7 @@ class TransitionNetRSNN(BaseRSNN):
         warmup_steps: int = 5,
         unroll_steps: int = 1,
         teacher_forcing_p: float = 1.0,
+        relative_l2_weight: float = 1.0,
         max_norm: Optional[float] = None,
         record: bool = False,
         excluded_monitor_keys: Optional[list[str]] = None,
@@ -126,7 +130,7 @@ class TransitionNetRSNN(BaseRSNN):
             next_state = next_states[warmup_steps + i]
             next_state_delta_hat = self.predict(state, action, record=record)
             next_state_hat = state + next_state_delta_hat
-            prediction_loss += self.criterion(next_state_hat.squeeze(0), next_state)
+            prediction_loss += self.criterion(next_state_hat.squeeze(0), next_state, relative_l2_weight)
             
             state = next_state  # teacher forcing
             if teacher_forcing_p < 1.0 and torch.rand(1).item() > teacher_forcing_p:

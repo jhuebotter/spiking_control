@@ -5,6 +5,7 @@ import pygame
 from pygame import gfxdraw
 import numpy as np
 from typing import Optional
+from copy import deepcopy
 
 
 WHITE = (255, 255, 255)
@@ -23,6 +24,8 @@ class ReacherEnv(gym.Env):
         moving_target: float = 0.0,
         fully_observable: bool = True,
         show_target_arm: bool = False,
+        include_velocity: bool = True,
+        delta_in_obs: bool = False,
         dt: float = 0.02,
         eval: bool = False,
         full_target_obs: bool = False,
@@ -45,6 +48,8 @@ class ReacherEnv(gym.Env):
 
         self.full_target_obs = full_target_obs
         self.target_dim = 8 if self.full_target_obs else 2
+        self.include_velocity = include_velocity
+        self.delta_in_obs = delta_in_obs
 
         #####
 
@@ -66,8 +71,14 @@ class ReacherEnv(gym.Env):
         self.show_target_arm = show_target_arm
         self.screen_px = int(256 * zoom)
 
+        n_noise = 8 if self.include_velocity else 6
+        if self.delta_in_obs:
+            n_obs = 2 * n_noise
+        else:
+            n_obs = n_noise
+
         self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
-        self.observation_noise_std = np.ones(8) * 0.01
+        self.observation_noise_std = np.ones(n_noise) * 0.01
 
         self.action_space = spaces.Box(
             low=self.min_action, high=self.max_action, shape=(2,)
@@ -78,7 +89,7 @@ class ReacherEnv(gym.Env):
             self.observation_space = spaces.Dict(
                 {
                     "proprio": spaces.Box(
-                        low=np.array([-1.0] * 8), high=np.array([1.0] * 8)
+                        low=np.array([-1.0] * n_obs), high=np.array([1.0] * n_obs)
                     ),
                     "target": spaces.Box(
                         low=np.array([-1.0] * self.target_dim),
@@ -101,9 +112,15 @@ class ReacherEnv(gym.Env):
             "cos alpha",
             "sin beta",
             "cos beta",
-            "vel alpha",
-            "vel beta",
         ]
+        if self.include_velocity:
+            self.state_labels += [
+                "vel alpha",
+                "vel beta",
+            ]
+
+        if self.delta_in_obs:
+            self.state_labels += ["delta " + l for l in self.state_labels]
 
         self.target_labels = [
             "hand x",
@@ -118,6 +135,7 @@ class ReacherEnv(gym.Env):
         self.isopen = True
 
         self.state = None
+        self.last_state = None
         self.target = None
 
         self.manual_video = True
@@ -180,6 +198,7 @@ class ReacherEnv(gym.Env):
         )
 
         # update state
+        self.last_state = deepcopy(self.state)
         self.state = np.array(self.stepPhysics(action))
         self.state = self.np_random.normal(self.state, self.process_noise_std)
         self.stepTarget()
@@ -187,18 +206,29 @@ class ReacherEnv(gym.Env):
 
         # make observation
         target_observation = self.make_observation(self.target, noise=False)
-        if self.fully_observable:
-            proprio_observation = self.make_observation(self.state)
-            observation = {
-                "proprio": proprio_observation,
-                "target": target_observation[: self.target_dim],
-            }
-        else:
-            observation = self.render(mode="rgb_array")
 
         # calculate reward
         ob_rew = self.make_observation(self.state, noise=False)
         reward = -np.linalg.norm(ob_rew[:2] - target_observation[:2]) * self.dt
+
+        if self.fully_observable:
+            proprio_observation = self.make_observation(self.state)
+            if self.delta_in_obs:
+                delta_observation = (
+                    ob_rew - self.make_observation(self.last_state, noise=False)
+                ) / (self.dt * self.max_vel)
+                delta_observation = self.np_random.normal(
+                    delta_observation, self.observation_noise_std
+                )
+                total_observation = np.hstack([proprio_observation, delta_observation])
+            else:
+                total_observation = proprio_observation
+            observation = {
+                "proprio": total_observation,
+                "target": target_observation[: self.target_dim],
+            }
+        else:
+            observation = self.render(mode="rgb_array")
 
         # check if episode is done
         terminated = False
@@ -248,24 +278,23 @@ class ReacherEnv(gym.Env):
         norm_vel2 = state[3] / self.max_vel
 
         observation = np.array(
-            [
-                hand_x,
-                hand_y,
-                np.sin(a1),
-                np.cos(a1),
-                np.sin(a2),
-                np.cos(a2),
-                norm_vel1,
-                norm_vel2,
-            ]
+            [hand_x, hand_y, np.sin(a1), np.cos(a1), np.sin(a2), np.cos(a2)]
         )
+
+        if self.include_velocity:
+            observation = np.hstack(
+                [
+                    observation,
+                    np.array([norm_vel1, norm_vel2]),
+                ]
+            )
 
         if noise:
             observation = self.np_random.normal(observation, self.observation_noise_std)
 
         return observation
 
-    def reset(self, seed: Optional[int]=None, options: Optional[dict]=None):
+    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
         self.episode_step_count = 0
         self.steps_on_target = 0
         self.cumulative_distance = 0.0
@@ -296,6 +325,7 @@ class ReacherEnv(gym.Env):
             self.state[:2] = self.np_random.uniform(low=0.0, high=2 * np.pi, size=(2,))
         else:
             self.state = state
+        self.last_state = self.state
 
         if target is None:
             self.target = np.zeros(4)
@@ -314,12 +344,22 @@ class ReacherEnv(gym.Env):
             self.target = target
 
         # make observation
-        proprio_observation = self.make_observation(self.state)
         target_observation = self.make_observation(self.target, noise=False)
-        observation = {
-            "proprio": proprio_observation,
-            "target": target_observation[: self.target_dim],
-        }
+        if self.fully_observable:
+            proprio_observation = self.make_observation(self.state)
+            if self.delta_in_obs:
+                delta_observation = proprio_observation - self.make_observation(
+                    self.last_state
+                )
+                total_observation = np.hstack([proprio_observation, delta_observation])
+            else:
+                total_observation = proprio_observation
+            observation = {
+                "proprio": total_observation,
+                "target": target_observation[: self.target_dim],
+            }
+        else:
+            observation = self.render(mode="rgb_array")
 
         # additional info
         on_target = False

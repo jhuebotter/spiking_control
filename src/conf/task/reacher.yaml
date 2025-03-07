@@ -8,5 +8,7 @@ params:
   render_mode: rgb_array
   moving_target: 0.0
   fully_observable: true
+  include_velocity: false
+  delta_in_obs: false
   show_target_arm: false
   dt: 0.02

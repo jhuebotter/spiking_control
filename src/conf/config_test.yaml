@@ -21,8 +21,9 @@ model:
   connection:
     n_dims: null
     latent_bias: false
-  hidden_dim: 1000
+  hidden_dim: 500
   initializer:
+    alpha: 0.8
     mu_u: 0.0
     sigma_u: 1.0
     nu: 50
@@ -40,7 +41,7 @@ model:
     #    sigma_scale: 0.5
     #    learn_sigma: false
   input:
-    scaling: 0.3
+    scaling: 0.5
     learn_scaling: false
 
 optimizer:
@@ -74,22 +75,23 @@ run:
   load_dir: null
   prediction_unroll: 20
   eval_first: true
-  early_stop_metric: "test average reward"
+  early_stop_metric: "test average steps on target"
   early_stop_patience: 30
   early_stop_mode: "max"
   lr_decay: 0.95
   lr_warmup_steps: 0
-  lr_end: 0.0002
+  lr_end: 0.0003
   teacher_forcing_p: 1.0
-  teacher_forcing_decay: 1.0
+  teacher_forcing_decay: 0.99
+  teacher_forcing_warmup_steps: 10
   action_noise_std: 0.0
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0
   action_reg_weight_end: 0.0
-  action_reg_weight_warmup_steps: 20
+  action_reg_weight_warmup_steps: 0
   action_smoothness_reg_weight_start: 0.0
   action_smoothness_reg_weight_end: 0.0
-  action_smoothness_reg_weight_warmup_steps: 20
+  action_smoothness_reg_weight_warmup_steps: 0
   iterations: 160
 
 plotting:
