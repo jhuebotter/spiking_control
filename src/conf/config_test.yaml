@@ -11,6 +11,8 @@ experiment: test
 device: cuda
 
 model:
+  num_rec_layers: 1
+  num_ff_layers: 1
   time:
     dt: 0.002
     tau_mem: 0.02
@@ -87,10 +89,10 @@ run:
   action_noise_std: 0.0
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0
-  action_reg_weight_end: 0.001
+  action_reg_weight_end: 0.01
   action_reg_weight_warmup_steps: 20
   action_smoothness_reg_weight_start: 0.0
-  action_smoothness_reg_weight_end: 0.001
+  action_smoothness_reg_weight_end: 0.01
   action_smoothness_reg_weight_warmup_steps: 20
   iterations: 160
 
