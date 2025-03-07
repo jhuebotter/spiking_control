@@ -73,7 +73,7 @@ optimizer: ${optimizer}
 learning:
   batches_per_iteration: 25
   params:
-    relative_l2_weight: 1.0
+    relative_l2_weight: 0.9
     batch_size: 256
     max_norm: 30
     warmup_steps: 5
