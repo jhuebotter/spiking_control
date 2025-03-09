@@ -20,10 +20,6 @@ def make_env(config: dict, seed: int = 0, eval: bool = False) -> gym.Env:
         print('loading 2d reacher task')
         from src.envs import ReacherEnv
         env_fn = lambda : ReacherEnv(eval=eval, **config['params'])
-    elif task == 'reacher_simple':
-        print('loading simple 2d reacher task')
-        from src.envs import ReacherEnvSimple
-        env_fn = lambda : ReacherEnvSimple(eval=eval, **config['params'])
     elif task == 'plane':
         print('loading 2d plane task')
         from src.envs import TwoDPlaneEnv

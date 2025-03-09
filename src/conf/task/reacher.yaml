@@ -6,9 +6,10 @@ steps_per_evaluation: ${mul:${task.params.max_episode_steps}, ${task.num_eval_en
 params:
   max_episode_steps: 200
   render_mode: rgb_array
+  dt: 0.02
+  control: velocity
   moving_target: 0.0
   fully_observable: true
   include_velocity: false
   delta_in_obs: false
   show_target_arm: false
-  dt: 0.02

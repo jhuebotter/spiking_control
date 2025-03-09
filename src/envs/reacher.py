@@ -30,6 +30,7 @@ class ReacherEnv(gym.Env):
         eval: bool = False,
         full_target_obs: bool = False,
         zoom: float = 1.0,
+        control: str = "velocity",
         **kwargs
     ):
         self.metadata = {
@@ -43,6 +44,8 @@ class ReacherEnv(gym.Env):
         self.max_action = 1.0
         self.force_mag = 8.0
         self.damp = 5.0
+        self.control = control.lower()
+        assert self.control in ["velocity", "acceleration"]
 
         #####
 
@@ -156,10 +159,13 @@ class ReacherEnv(gym.Env):
 
         # get change in state since last update
         dadt = vel
-        dvdt = action * self.force_mag - self.damp * vel
-        # update state
         angles += dadt * self.dt
-        vel += dvdt * self.dt
+
+        if self.control == "acceleration":
+            dvdt = action * self.force_mag - self.damp * vel
+            vel += dvdt * self.dt
+        elif self.control == "velocity":
+            vel = action * self.max_vel - (self.damp * vel) * self.dt
 
         # clip velocity in allowed limits
         vel = np.clip(vel, self.min_vel, self.max_vel)
@@ -486,30 +492,6 @@ class ReacherEnv(gym.Env):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
-
-
-class ReacherEnvSimple(ReacherEnv):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def stepPhysics(self, action):
-        angles = self.state[:2]  # get last joint angles
-        vel = self.state[2:]  # get last joint velocity
-
-        # get change in state since last update
-        dadt = vel
-
-        # update state
-        angles += dadt * self.dt
-        vel = action * self.max_vel
-
-        # clip velocity in allowed limits
-        vel = np.clip(vel, self.min_vel, self.max_vel)
-
-        # avoid very small velocity residues that bounce due to dampening
-        vel[np.abs(vel) < 0.01 * self.max_vel] = 0.0
-
-        return np.hstack([angles, vel])
 
 
 if __name__ == "__main__":

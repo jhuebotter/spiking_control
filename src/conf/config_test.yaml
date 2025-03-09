@@ -82,7 +82,7 @@ run:
   early_stop_mode: "max"
   lr_decay: 0.95
   lr_warmup_steps: 0
-  lr_end: 0.0003
+  lr_end: 0.0005
   teacher_forcing_p: 1.0
   teacher_forcing_decay: 1.0
   teacher_forcing_warmup_steps: 10
@@ -94,7 +94,7 @@ run:
   action_smoothness_reg_weight_start: 0.0
   action_smoothness_reg_weight_end: 0.01
   action_smoothness_reg_weight_warmup_steps: 20
-  iterations: 160
+  iterations: 150
 
 plotting:
   render_every: 10

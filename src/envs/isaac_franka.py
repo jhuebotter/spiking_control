@@ -796,9 +796,9 @@ class FrankaEnv(gym.Env):
         # active_joints: list[int] = [0, 1, 2, 3, 4, 5],
         control: str = "position",
         max_acceleration: float = 10.0,
-        report_only_active_joints: bool = True,
-        report_sin_cos: bool = False,
-        report_velocity: bool = False,
+        include_only_active_joints: bool = True,
+        include_sin_cos: bool = False,
+        include_velocity: bool = False,
         **kwargs,
     ) -> None:
         self.metadata = {
@@ -815,9 +815,9 @@ class FrankaEnv(gym.Env):
         assert 0 < dof <= 7
         active_joints = [i for i in range(dof)]
         self.active_joints = active_joints
-        self.report_only_active_joints = report_only_active_joints
-        self.report_sin_cos = report_sin_cos
-        self.report_velocity = report_velocity
+        self.include_only_active_joints = include_only_active_joints
+        self.include_sin_cos = include_sin_cos
+        self.include_velocity = include_velocity
 
         env_cfg = FrankaReachCustomEnvCfg()
         env_cfg.scene.num_envs = num_envs
@@ -834,14 +834,14 @@ class FrankaEnv(gym.Env):
         )
         self.action_space = self._env.action_space
 
-        n_joint_obs = len(self.active_joints) if self.report_only_active_joints else 7
-        if self.report_sin_cos:
+        n_joint_obs = len(self.active_joints) if self.include_only_active_joints else 7
+        if self.include_sin_cos:
             n_joint_obs += (
-                2 * len(self.active_joints) if self.report_only_active_joints else 14
+                2 * len(self.active_joints) if self.include_only_active_joints else 14
             )
-        if self.report_velocity:
+        if self.include_velocity:
             n_joint_obs += (
-                len(self.active_joints) if self.report_only_active_joints else 7
+                len(self.active_joints) if self.include_only_active_joints else 7
             )
 
         obs_limits = np.tile(
@@ -862,26 +862,26 @@ class FrankaEnv(gym.Env):
             }
         )
 
-        if self.report_only_active_joints:
+        if self.include_only_active_joints:
             self.state_labels = [f"joint {i+1} pos" for i in active_joints]
             obs_indices = [i for i in active_joints]
-            if self.report_sin_cos:
+            if self.include_sin_cos:
                 self.state_labels += [f"joint {i+1} sin" for i in active_joints]
                 self.state_labels += [f"joint {i+1} cos" for i in active_joints]
                 obs_indices += [i + 7 for i in active_joints]
                 obs_indices += [i + 14 for i in active_joints]
-            if self.report_velocity:
+            if self.include_velocity:
                 self.state_labels += [f"joint {i+1} vel" for i in active_joints]
                 obs_indices += [i + 21 for i in active_joints]
         else:
             self.state_labels = [f"joint {i+1} pos" for i in range(7)]
             obs_indices = [i for i in range(7)]
-            if self.report_sin_cos:
+            if self.include_sin_cos:
                 self.state_labels += [f"joint {i+1} sin" for i in range(7)]
                 self.state_labels += [f"joint {i+1} cos" for i in range(7)]
                 obs_indices += [i + 7 for i in range(7)]
                 obs_indices += [i + 14 for i in range(7)]
-            if self.report_velocity:
+            if self.include_velocity:
                 self.state_labels += [f"joint {i+1} vel" for i in range(7)]
                 obs_indices += [i + 21 for i in range(7)]
         self.state_labels += ["hand x", "hand y", "hand z"]
