@@ -144,6 +144,7 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
     num_observations_ = 20
     decimation = 1
     control = "position"
+    compute_velocity = True
     max_acceleration = 10.0
     joint_stiffness = 400.0
     joint_damping = 80.0
@@ -320,6 +321,9 @@ class FrankaReachCustomEnv(DirectRLEnv):
             (self.num_envs, self.robot.num_joints), device=self.device
         )
         self.robot_joint_pos = torch.zeros(
+            (self.num_envs, self.robot.num_joints), device=self.device
+        )
+        self.prev_robot_joint_pos = torch.zeros(
             (self.num_envs, self.robot.num_joints), device=self.device
         )
         self.robot_joint_vel = torch.zeros(
@@ -715,6 +719,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
         self.sim._physics_context._physx_sim_interface.fetch_results()
 
         # update local variables
+        self.prev_robot_joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.robot_joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
         self.robot_joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
         self.robot_dof_pos_targets[env_ids] = self.robot_joint_pos[env_ids]
@@ -755,8 +760,17 @@ class FrankaReachCustomEnv(DirectRLEnv):
             env_ids = torch.arange(self.num_envs, device=self.device)
 
         # robot state
+        self.prev_robot_joint_pos[env_ids] = self.robot_joint_pos[env_ids]
         self.robot_joint_pos[env_ids] = self.robot.data.joint_pos[env_ids]
-        self.robot_joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
+        if self.cfg.compute_velocity:
+            self.robot_joint_vel[env_ids] = (
+                self.robot_joint_pos[env_ids] - self.prev_robot_joint_pos[env_ids]
+            ) / self.step_dt
+            # print("prev_robot_joint_pos: ", self.prev_robot_joint_pos)
+            # print("robot_joint_pos: ", self.robot_joint_pos)
+            # print("robot_joint_vel: ", self.robot_joint_vel)
+        else:
+            self.robot_joint_vel[env_ids] = self.robot.data.joint_vel[env_ids]
         self.robot_joint_acc[env_ids] = self.robot.data.joint_acc[env_ids]
         self.robot_joint_tor_comp[env_ids] = self.robot.data.computed_torque[env_ids]
         self.robot_joint_tor_applied[env_ids] = self.robot.data.applied_torque[env_ids]
@@ -799,6 +813,7 @@ class FrankaEnv(gym.Env):
         include_only_active_joints: bool = True,
         include_sin_cos: bool = False,
         include_velocity: bool = False,
+        compute_velocity: bool = True,
         **kwargs,
     ) -> None:
         self.metadata = {
@@ -822,6 +837,7 @@ class FrankaEnv(gym.Env):
         env_cfg = FrankaReachCustomEnvCfg()
         env_cfg.scene.num_envs = num_envs
         env_cfg.max_acceleration = max_acceleration
+        env_cfg.compute_velocity = compute_velocity
         env_cfg.sim.dt = dt
         env_cfg.episode_length_s = max_episode_steps * dt * render_interval
         env_cfg.decimation = render_interval
