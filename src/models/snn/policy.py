@@ -81,7 +81,11 @@ class PolicyNetRSNN(BaseRSNN):
         )
 
     def criterion(
-        self, target: Tensor, y_hat: Tensor, loss_gain: Optional[dict] = None, relative_l2_weight: float = 1.0
+        self,
+        target: Tensor,
+        y_hat: Tensor,
+        loss_gain: Optional[dict] = None,
+        relative_l2_weight: float = 1.0,
     ) -> Tensor:
         if loss_gain is None:
             L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2))
@@ -91,8 +95,10 @@ class PolicyNetRSNN(BaseRSNN):
             gain = torch.tensor(loss_gain["gain"], device=self.device)
 
             L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
-            L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]) * gain) 
-        loss = relative_l2_weight * L2_loss_term + (1 - relative_l2_weight) * L1_loss_term
+            L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]) * gain)
+        loss = (
+            relative_l2_weight * L2_loss_term + (1 - relative_l2_weight) * L1_loss_term
+        )
         return loss
 
     def train_fn(
@@ -155,7 +161,10 @@ class PolicyNetRSNN(BaseRSNN):
             )
             new_state_hat = new_state_hat + new_state_delta_hat
             policy_loss += self.criterion(
-                target, new_state_hat.squeeze(0), loss_gain=loss_gain, relative_l2_weight=relative_l2_weight
+                target,
+                new_state_hat.squeeze(0),
+                loss_gain=loss_gain,
+                relative_l2_weight=relative_l2_weight,
             )
             action_hats.append(action_hat)
         action_hats = torch.stack(action_hats, dim=1)
@@ -165,7 +174,9 @@ class PolicyNetRSNN(BaseRSNN):
         reg_loss = self.get_reg_loss()
         action_reg_loss = action_hats.abs().mean() * action_reg_weight
         action_diff = action_hats[:, 1:] - action_hats[:, :-1]
-        action_smoothness_reg_loss = action_diff.abs().mean() * action_smoothness_reg_weight
+        action_smoothness_reg_loss = (
+            action_diff.abs().mean() * action_smoothness_reg_weight
+        )
         loss = policy_loss + reg_loss + action_reg_loss + action_smoothness_reg_loss
 
         # update the model

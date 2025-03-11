@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torch import Tensor
 from control_stork.models import RecurrentSpikingModel
 from control_stork.nodes import (
@@ -27,7 +28,7 @@ from control_stork.layers import Layer
 from src.extratypes import *
 
 
-class BaseRSNN(torch.nn.Module):
+class BaseRSNN(nn.Module):
     """Base class for spiking models with a hidden state."""
 
     def __init__(
@@ -40,7 +41,7 @@ class BaseRSNN(torch.nn.Module):
         dt: float = 1e-3,
         repeat_input: int = 1,
         out_style: str = "last",
-        input_encoder: torch.nn.Module = None,
+        input_encoder: Optional[nn.Module] = None,
         input_type: CellGroup = InputGroup,
         input_kwargs: dict = {},
         neuron_type: CellGroup = FastLIFGroup,

@@ -1,15 +1,34 @@
 model:
   type: prnn
   params:
-    hidden_dim: 512
-    activation: 
+    num_rec_layers: ${model.num_rec_layers}
+    num_ff_layers: ${model.num_ff_layers}
+    hidden_dim: ${model.hidden_dim}
+    encoder: ${model.encoder}
+    input:
+      type: input
+      kwargs: 
+        scaling: ${model.input.scaling}
+        learn_scaling: ${model.input.learn_scaling}
+    connection:
+      kwargs:
+        bias: true
+        n_dims: ${model.connection.n_dims}
+        latent_bias: ${model.connection.latent_bias}
+    activation:
       type: lrelu
+    regularization:
+      weights:
+      - type: L2
+        kwargs:
+          strength: 0.0
 
 optimizer: ${optimizer}
 
 learning:
   batches_per_iteration: 10
   params:
+    relative_l2_weight: 1.0
     batch_size: 256
     max_norm: 30
     warmup_steps: 5

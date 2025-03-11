@@ -19,7 +19,7 @@ class PolicyNetPRNN(BasePRNN):
         num_rec_layers: int = 0,
         num_ff_layers: int = 2,
         bias: bool = True,
-        act_fn: Callable = F.leaky_relu,
+        activation: Callable = F.leaky_relu,
         device: Union[str, torch.device] = "cpu",
         dtype: torch.dtype = torch.float,
         name: str = "policy model",
@@ -33,7 +33,7 @@ class PolicyNetPRNN(BasePRNN):
             num_rec_layers=num_rec_layers,
             num_ff_layers=num_ff_layers,
             bias=bias,
-            act_fn=act_fn,
+            activation=activation,
             device=device,
             dtype=dtype,
             name=name,
@@ -41,13 +41,25 @@ class PolicyNetPRNN(BasePRNN):
         )
 
     def criterion(
-        self, y_hat: Tensor, y: Tensor, loss_gain: Optional[dict] = None
+        self,
+        target: Tensor,
+        y_hat: Tensor,
+        loss_gain: Optional[dict] = None,
+        relative_l2_weight: float = 1.0,
     ) -> Tensor:
         if loss_gain is None:
-            return torch.nn.functional.mse_loss(y_hat, y)
-        use = torch.tensor(loss_gain["use"], device=self.device, dtype=torch.bool)
-        gain = torch.tensor(loss_gain["gain"], device=self.device)
-        return torch.mean(torch.pow(y_hat[:, use] - y, 2) * gain)
+            L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2))
+            L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]))
+        else:
+            use = torch.tensor(loss_gain["use"], device=self.device)
+            gain = torch.tensor(loss_gain["gain"], device=self.device)
+
+            L2_loss_term = torch.mean(torch.pow(target - y_hat[:, use], 2) * gain)
+            L1_loss_term = torch.mean(torch.abs(target - y_hat[:, use]) * gain)
+        loss = (
+            relative_l2_weight * L2_loss_term + (1 - relative_l2_weight) * L1_loss_term
+        )
+        return loss
 
     def get_reg_loss(
         self,
@@ -79,6 +91,9 @@ class PolicyNetPRNN(BasePRNN):
         batch_size: int = 128,
         warmup_steps: int = 5,
         unroll_steps: int = 20,
+        action_reg_weight: float = 0.0,
+        action_smoothness_reg_weight: float = 0.0,
+        relative_l2_weight: float = 1.0,
         max_norm: Optional[float] = None,
         deterministic_transition: bool = False,
         action_target_std: Optional[float] = None,
@@ -123,6 +138,7 @@ class PolicyNetPRNN(BasePRNN):
         target = targets[-1]
 
         # unroll the model
+        action_hats = []
         for i in range(unroll_steps):
             action_mu, action_logvar = self(new_state_hat, target)
             action = self.reparameterize(action_mu, action_logvar)
@@ -131,15 +147,26 @@ class PolicyNetPRNN(BasePRNN):
             )
             new_state_hat = new_state_hat + new_state_delta_hat
             # compute the loss
-            policy_loss += self.criterion(new_state_hat.squeeze(0), target, loss_gain)
+            policy_loss += self.criterion(
+                target,
+                new_state_hat.squeeze(0),
+                loss_gain,
+                relative_l2_weight=relative_l2_weight,
+            )
             reg_loss += self.get_reg_loss(
                 action_mu, action_logvar, action_target_std, reg_scale
             )
+            action_hats.append(action_mu)
+        action_hats = torch.stack(action_hats, dim=1)
 
         # compute the loss
         policy_loss = policy_loss / unroll_steps
-        reg_loss = reg_loss / unroll_steps
-        loss = policy_loss + reg_loss
+        action_reg_loss = action_hats.abs().mean() * action_reg_weight
+        action_diff = action_hats[:, 1:] - action_hats[:, :-1]
+        action_smoothness_reg_loss = (
+            action_diff.abs().mean() * action_smoothness_reg_weight
+        )
+        loss = policy_loss + reg_loss + action_reg_loss + action_smoothness_reg_loss
 
         # update the model
         loss.backward()
@@ -154,7 +181,9 @@ class PolicyNetPRNN(BasePRNN):
         result = {
             "loss": loss.item(),
             "policy loss": policy_loss.item(),
-            "reg_loss": reg_loss.item(),
+            "reg loss": reg_loss.item(),
+            "action reg loss": action_reg_loss.item(),
+            "action smoothness reg loss": action_smoothness_reg_loss.item(),
             "grad norm": grad_norm,
             "clipped grad norm": clipped_grad_norm,
         }

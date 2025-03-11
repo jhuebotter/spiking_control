@@ -18,7 +18,7 @@ class TransitionNetPRNN(BasePRNN):
         num_rec_layers: int = 1,
         num_ff_layers: int = 1,
         bias: bool = True,
-        act_fn: Callable = F.leaky_relu,
+        activation: Callable = F.leaky_relu,
         device: Union[str, torch.device] = "cpu",
         dtype: torch.dtype = torch.float,
         name: str = "transition model",
@@ -32,7 +32,7 @@ class TransitionNetPRNN(BasePRNN):
             num_rec_layers=num_rec_layers,
             num_ff_layers=num_ff_layers,
             bias=bias,
-            act_fn=act_fn,
+            activation=activation,
             device=device,
             dtype=dtype,
             name=name,
@@ -51,10 +51,13 @@ class TransitionNetPRNN(BasePRNN):
         warmup_steps: int = 5,
         unroll_steps: int = 1,
         teacher_forcing_p: float = 1.0,
+        relative_l2_weight: float = 1.0,
         max_norm: Optional[float] = None,
         record: bool = False,
         excluded_monitor_keys: Optional[list[str]] = None,
     ) -> dict:
+        
+        # ! currently using gaussian_nll_loss means there is no need for relative_l2_weight
 
         # sample a batch of transitions
         (
@@ -101,6 +104,9 @@ class TransitionNetPRNN(BasePRNN):
             # update the state
             state = next_state  # teacher forcing
             if teacher_forcing_p < 1.0 and torch.rand(1).item() > teacher_forcing_p:
+                next_state_hat = self.reparameterize(
+                    next_state_hat_mu, next_state_hat_delta_logvar
+                )
                 state = next_state_hat   # autoregressive
 
         # compute the loss

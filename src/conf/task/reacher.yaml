@@ -7,9 +7,10 @@ params:
   max_episode_steps: 200
   render_mode: rgb_array
   dt: 0.02
-  control: velocity
+  control: acceleration
+  max_acceleration: 10.0
   moving_target: 0.0
   fully_observable: true
-  include_velocity: false
+  include_velocity: true
   delta_in_obs: false
   show_target_arm: false

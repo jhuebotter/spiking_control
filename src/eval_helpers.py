@@ -28,7 +28,7 @@ def baseline_prediction(
 
     # make 1 step predictions
     transition_model.reset_state()
-    delta_states = transition_model(states, actions, deterministic=True)
+    delta_states = transition_model.predict(states, actions, deterministic=True)
     predicted_next_states = states + delta_states
     predicted_state_mse = torch.nn.functional.mse_loss(
         predicted_next_states[warmup:], next_states[warmup:]
@@ -41,7 +41,7 @@ def baseline_prediction(
     if steps > 0:
         for step in range(steps):
             transition_model.reset_state()
-            _ = transition_model(
+            _ = transition_model.predict(
                 states[step : warmup + step],
                 actions[step : warmup + step],
                 deterministic=True,
@@ -50,7 +50,7 @@ def baseline_prediction(
             state = states[warmup + step : warmup + step + 1]
             for i in range(unroll):
                 action = actions[warmup + step + i : warmup + step + i + 1]
-                delta_state = transition_model(state, action, deterministic=True)
+                delta_state = transition_model.predict(state, action, deterministic=True)
                 pred_states[i] = state + delta_state.detach()
                 state = pred_states[i]
             unrolled_state_mse += torch.nn.functional.mse_loss(
@@ -118,7 +118,7 @@ def make_predictions(
                 state = states[t + j]
             else:
                 state = next_state_hat
-            state_delta_hat = transition_model(
+            state_delta_hat = transition_model.predict(
                 state, actions[t + j], deterministic=deterministic
             )
             next_state_hat = state + state_delta_hat

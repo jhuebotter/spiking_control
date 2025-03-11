@@ -27,7 +27,7 @@ from control_stork.regularizers import (
     WeightL1Regularizer,
     WeightL2Regularizer,
 )
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from src.utils import conf_to_dict
 from src.extratypes import *
 
@@ -51,6 +51,7 @@ def make_transition_model(
 
     if type_ == "prnn":
         model = TransitionNetPRNN
+        params.update(make_prnn_objects(config))
     elif type_ == "rsnn":
         model = TransitionNetRSNN
         params.update(make_snn_objects(config))
@@ -106,6 +107,7 @@ def make_policy_model(
 
     if type_ == "prnn":
         model = PolicyNetPRNN
+        params.update(make_prnn_objects(config))
     elif type_ == "rsnn":
         model = PolicyNetRSNN
         params.update(make_snn_objects(config))
@@ -150,6 +152,30 @@ def make_policy_model(
 
     return policynet
 
+
+def make_prnn_objects(config: DictConfig) -> dict:
+
+    # pretty print the configuration
+    print(OmegaConf.to_yaml(config))
+
+    object_dict = {}
+
+    input_scaler = InputScaler(
+        scaling=config.params.input.kwargs.get("scaling", 1.0),
+        learn_scaling=config.params.input.kwargs.get("learn_scaling", False),
+    )
+    object_dict["input_scaler"] = input_scaler
+
+    output_scaler = OutputScaler(
+        weight_scale=config.params.output.kwargs.get("weight_scale", 1.0),
+        output_scale=config.params.output.kwargs.get("output_scale", 1.0),
+        learn_weight_scale=config.params.output.kwargs.get("learn_weight_scale", False),
+        learn_output_scale=config.params.output.kwargs.get("learn_output_scale", False),
+        apply_tanh=config.params.output.kwargs.get("apply_tanh", False),
+    )
+    object_dict["output_scaler"] = output_scaler
+
+    return object_dict
 
 def make_snn_objects(config: DictConfig) -> dict:
     params = {}
@@ -378,6 +404,71 @@ def make_act_fn(
     elif af == "default":
         fn = None
     else:
-        raise NotImplementedError(f"the activation function {fn} is not implemented")
+        raise NotImplementedError(f"the activation function {af} is not implemented")
 
     return fn
+
+
+class InputScaler(torch.nn.Module):
+    def __init__(self, scaling: float = 1.0, learn_scaling: bool = False):
+        super().__init__()
+
+        if learn_scaling:
+            self.scaling_param = torch.nn.Parameter(torch.log(torch.ones(1) * scaling))
+        else:
+            # here we use a buffer to store the scaling factor
+            self.register_buffer("scaling", torch.ones(1) * scaling)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x * self.get_scaling()
+    
+    def get_scaling(self) -> torch.Tensor:
+        return torch.exp(self.scaling_param) if hasattr(self, "scaling_param") else self.scaling
+    
+
+class OutputScaler(torch.nn.Module):
+    def __init__(
+        self,
+        weight_scale: float = 1.0,
+        output_scale: float = 1.0,
+        learn_weight_scale: bool = False,
+        learn_output_scale: bool = False,
+        apply_tanh: bool = False,
+    ):
+        super().__init__()
+
+        if learn_weight_scale:
+            self.weight_scale_param = torch.nn.Parameter(
+                torch.log(torch.ones(1) * weight_scale)
+            )
+        else:
+            self.register_buffer("weight_scale", torch.ones(1) * weight_scale)
+
+        if learn_output_scale:
+            self.output_scale_param = torch.nn.Parameter(
+                torch.log(torch.ones(1) * output_scale)
+            )
+        else:
+            self.register_buffer("output_scale", torch.ones(1) * output_scale)
+
+        self.apply_tanh = apply_tanh
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x * self.get_weight_scale()
+        if self.apply_tanh:
+            x = torch.tanh(x) * self.get_output_scale()
+        return x 
+
+    def get_weight_scale(self) -> torch.Tensor:
+        return (
+            torch.exp(self.weight_scale_param)
+            if hasattr(self, "weight_scale_param")
+            else self.weight_scale
+        )
+
+    def get_output_scale(self) -> torch.Tensor:
+        return (
+            torch.exp(self.output_scale_param)
+            if hasattr(self, "output_scale_param")
+            else self.output_scale
+        )

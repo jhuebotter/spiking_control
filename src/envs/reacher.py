@@ -22,6 +22,7 @@ class ReacherEnv(gym.Env):
         max_episode_steps: int = 200,
         render_mode: str = "human",
         moving_target: float = 0.0,
+        max_acceleration: float = 10.0,
         fully_observable: bool = True,
         show_target_arm: bool = False,
         include_velocity: bool = True,
@@ -42,7 +43,7 @@ class ReacherEnv(gym.Env):
         self.max_episode_steps = max_episode_steps
         self.min_action = -1.0
         self.max_action = 1.0
-        self.force_mag = 8.0
+        self.max_acceleration = max_acceleration
         self.damp = 5.0
         self.control = control.lower()
         assert self.control in ["velocity", "acceleration"]
@@ -58,7 +59,7 @@ class ReacherEnv(gym.Env):
 
         self.eval = eval
 
-        self.max_vel = np.pi
+        self.max_vel = np.pi / 2.0
         self.min_vel = -self.max_vel
 
         self.random_target = True
@@ -162,10 +163,10 @@ class ReacherEnv(gym.Env):
         angles += dadt * self.dt
 
         if self.control == "acceleration":
-            dvdt = action * self.force_mag - self.damp * vel
+            dvdt = action * self.max_acceleration - self.damp * vel
             vel += dvdt * self.dt
         elif self.control == "velocity":
-            vel = action * self.max_vel - (self.damp * vel) * self.dt
+            vel = action * self.max_vel
 
         # clip velocity in allowed limits
         vel = np.clip(vel, self.min_vel, self.max_vel)

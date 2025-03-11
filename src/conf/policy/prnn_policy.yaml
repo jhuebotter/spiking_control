@@ -5,6 +5,18 @@ model:
   params:
     num_rec_layers: 0
     num_ff_layers: 2
+    output:
+      kwargs:
+        weight_scale: 0.5
+        output_scale: 1.0
+        learn_weight_scale: false
+        learn_output_scale: false
+        apply_tanh: true
+    regularization:
+      weights:
+        - type: L2
+          kwargs:
+            strength: ${policy.wl2}
 
 learning:
   params:

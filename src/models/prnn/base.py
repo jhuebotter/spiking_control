@@ -14,13 +14,21 @@ class BasePRNN(nn.Module):
         output_dim: int,
         num_rec_layers: int = 0,
         num_ff_layers: int = 1,
+        input_encoder: Optional[nn.Module] = None,
         bias: bool = True,
+        bias_scale: float = 1.0,
         activation: Callable = F.leaky_relu,
+        input_scaler: Optional[nn.Module] = None,
+        output_scaler: Optional[nn.Module] = None,
         device: Union[str, torch.device] = "cpu",
         name: str = "PRNN",
         **kwargs,
     ) -> None:
         super().__init__()
+
+        for key, value in kwargs.items():
+            print(f"Warning: {key} is not used in {self.__class__.__name__}")
+            print(f"Value: {value}")
 
         # set attributes
         self.input_dim = input_dim
@@ -32,6 +40,13 @@ class BasePRNN(nn.Module):
         self.activation = activation
         self.name = name
         self.device = device
+        self.input_scaler = input_scaler
+        self.output_scaler = output_scaler
+
+        # make the input encoder
+        self.input_encoder = input_encoder
+        if self.input_encoder is not None:
+            self.input_dim = self.input_encoder.compute_output_shape(self.input_dim)
 
         # make layers
         layers = OrderedDict()
@@ -45,13 +60,32 @@ class BasePRNN(nn.Module):
         self.model = nn.ModuleDict(layers)
 
         # initialize weights
+        for name, layer in self.model.items():
+            if "gru" in name.lower():
+                for name, param in layer.named_parameters():
+                    if "weight" in name:
+                        # nn.init.kaiming_normal_(param)
+                        pass
+                    elif "bias" in name:
+                        # param.data *= bias_scale
+                        pass
+            elif "fc" in name.lower():
+                # nn.init.kaiming_normal_(layer.weight)
+                # layer.bias.data *= bias_scale
+                pass
+        # initialize the last layer to output 0 mean and 0 variance
         nn.init.zeros_(self.model.fc_mu.bias)
         nn.init.zeros_(self.model.fc_var.bias)
 
         # initialize hidden state
         self.h = None
 
+        # optimizer
         self.optimizer = None
+
+        # set some attributes to None for compatibility with other models
+        self.numeric_monitors = []
+        self.plot_monitors = []
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
         self.optimizer = optimizer
@@ -117,6 +151,10 @@ class BasePRNN(nn.Module):
         """forward pass of the model"""
         x = torch.cat([self.prepare_input(i) for i in args], -1)
 
+        if self.input_encoder is not None:
+            x = self.input_encoder(x)
+        if self.input_scaler is not None:
+            x = self.input_scaler(x)
         for name, layer in self.model.items():
             if "gru" in name.lower():
                 x, self.h = layer(x)
@@ -127,7 +165,10 @@ class BasePRNN(nn.Module):
         mu = self.model["fc_mu"](x)
         logvar = self.model["fc_var"](x)
 
-        return torch.tanh(mu), logvar
+        if self.output_scaler is not None:
+            mu = self.output_scaler(mu)
+
+        return mu, logvar
 
     def predict(
         self, *args, deterministic: bool = False, record: bool = False
@@ -139,3 +180,6 @@ class BasePRNN(nn.Module):
             return mu
         else:
             return self.reparameterize(mu, logvar)
+
+    def criterion(self, *args, **kwargs) -> Tensor:
+        raise NotImplementedError

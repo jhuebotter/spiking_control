@@ -1,37 +1,24 @@
 defaults:
   - task: reacher
   - agent: pred_agent
-  - policy: snn_policy
-  - transition: snn_transition
+  - policy: prnn_policy
+  - transition: prnn_transition
   - logging: logging
   - _self_
 
 seed: 42
-experiment: test
+experiment: test_prnn
 device: cuda
 
 model:
   num_rec_layers: 1
   num_ff_layers: 1
-  time:
-    dt: 0.002
-    tau_mem: 0.02
-    tau_syn: 0.01
-  activation:
-    type: sigmoidspike
-    beta: 25
   connection:
     n_dims: null
     latent_bias: false
   hidden_dim: 500
   initializer:
-    alpha: 0.8
-    mu_u: 0.0
-    sigma_u: 1.0
-    nu: 50
     bias_scale: 1.0
-    bias_mean: 0.0
-    scaling: 1
   encoder:
     #- type: identity  # this is also added when the list is empty
     - type: ${run.encoder1}
@@ -49,18 +36,8 @@ model:
 optimizer:
   type: adam
   params:
-    lr: 0.002
+    lr: 0.005
 
-LowerBoundL2:
-  strength: 0.0
-  threshold: -20
-  basis: mem
-  dims: null   # null means per neuron, 1 means avg per layer
-UpperBoundL2:
-  strength: 0.0
-  threshold: 20
-  basis: mem
-  dims: null
 transition:
   wl2: 0.0
 policy:
@@ -73,9 +50,9 @@ run:
   prediction_unroll: 20
   eval_first: true
   early_stop_metric: "test average steps on target"
-  early_stop_patience: 0
+  early_stop_patience: 30
   early_stop_mode: "max"
-  lr_decay: 0.97
+  lr_decay: 0.95
   lr_warmup_steps: 0
   lr_end: 0.0005
   teacher_forcing_p: 1.0
