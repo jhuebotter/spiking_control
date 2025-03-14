@@ -2,7 +2,7 @@ model:
   type: rsnn
   params:
     num_rec_layers: ${model.num_rec_layers}
-    num_ff_layers: ${model.num_ff_layers}
+    num_layers: ${model.num_layers}
     hidden_dim: ${model.hidden_dim}
     dt: ${model.time.dt}
     repeat_input: 8
@@ -75,7 +75,7 @@ optimizer: ${optimizer}
 learning:
   batches_per_iteration: 25
   params:
-    relative_l2_weight: 0.95
+    relative_l2_weight: 1.0
     batch_size: 256
     max_norm: 30
     warmup_steps: 5

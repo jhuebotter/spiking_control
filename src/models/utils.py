@@ -39,10 +39,11 @@ def make_transition_model(
 
     # get the model class
     type_ = config["type"].lower()
+
     params = {
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
-        "num_ff_layers": config.params.get("num_ff_layers", 2),
+        "num_ff_layers": config.params.get("num_layers", 2) - config.params.get("num_rec_layers", 0),
         **kwargs,
     }
 
@@ -98,7 +99,7 @@ def make_policy_model(
     params = {
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
-        "num_ff_layers": config.params.get("num_ff_layers", 2),
+        "num_ff_layers": config.params.get("num_layers", 2) - config.params.get("num_rec_layers", 0),
         **kwargs,
     }
 

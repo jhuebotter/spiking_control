@@ -4,12 +4,12 @@ defaults:
 model:
   params:
     # num_rec_layers: 1
-    # num_ff_layers: 1
+    # num_layers: 1
     output:
       kwargs:
         weight_scale: 0.5
         output_scale: 1.0
-        learn_weight_scale: false
+        learn_weight_scale: true
         learn_output_scale: false
         apply_tanh: true
     regularization:

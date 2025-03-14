@@ -4,7 +4,7 @@ defaults:
 model:
   params:
     # num_rec_layers: 1
-    # num_ff_layers: 1
+    # num_layers: 1
     output:
       kwargs:
         weight_scale: 0.005

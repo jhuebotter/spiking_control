@@ -11,8 +11,8 @@ experiment: test
 device: cuda
 
 model:
+  num_layers: 2
   num_rec_layers: 1
-  num_ff_layers: 1
   time:
     dt: 0.002
     tau_mem: 0.02
@@ -44,7 +44,7 @@ model:
     #    learn_sigma: false
   input:
     scaling: 0.5
-    learn_scaling: false
+    learn_scaling: true
 
 optimizer:
   type: adam
@@ -52,14 +52,14 @@ optimizer:
     lr: 0.002
 
 LowerBoundL2:
-  strength: 0.0
+  strength: 0.001
   threshold: -20
   basis: mem
   dims: null   # null means per neuron, 1 means avg per layer
 UpperBoundL2:
-  strength: 0.0
-  threshold: 20
-  basis: mem
+  strength: 0.001
+  threshold: 0.3
+  basis: out
   dims: null
 transition:
   wl2: 0.0
@@ -75,7 +75,7 @@ run:
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
   early_stop_mode: "max"
-  lr_decay: 0.97
+  lr_decay: 0.95
   lr_warmup_steps: 0
   lr_end: 0.0005
   teacher_forcing_p: 1.0
