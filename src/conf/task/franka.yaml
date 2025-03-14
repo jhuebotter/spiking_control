@@ -9,7 +9,7 @@ params:
   dt: 0.02
   control: velocity
   include_velocity: false
-  max_acceleration: 100.0
-  dof: 3
+  max_acceleration: 200.0
+  dof: 4
   include_sin_cos: false
   render_interval: 1
