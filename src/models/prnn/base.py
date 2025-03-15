@@ -30,6 +30,10 @@ class BasePRNN(nn.Module):
             print(f"Warning: {key} is not used in {self.__class__.__name__}")
             print(f"Value: {value}")
 
+        assert num_rec_layers >= 0, "Number of recurrent layers must be non-negative."
+        assert num_ff_layers >= 0, "Number of feedforward layers must be non-negative."
+        assert num_rec_layers + num_ff_layers > 0, "There must be at least one layer."
+
         # set attributes
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim

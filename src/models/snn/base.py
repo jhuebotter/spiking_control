@@ -63,6 +63,10 @@ class BaseRSNN(nn.Module):
     ) -> None:
         super().__init__()
 
+        assert num_rec_layers >= 0, "Number of recurrent layers must be non-negative."
+        assert num_ff_layers >= 0, "Number of feedforward layers must be non-negative."
+        assert num_rec_layers + num_ff_layers > 0, "There must be at least one layer."
+
         # gather layer parameters
         self.input_dim = input_dim
         self.output_dim = output_dim
