@@ -12,7 +12,7 @@ device: cuda
 
 model:
   num_layers: 2
-  num_rec_layers: 1
+  # num_rec_layers: 1
   time:
     dt: 0.002
     tau_mem: 0.02
@@ -23,7 +23,7 @@ model:
   connection:
     n_dims: null
     latent_bias: false
-  hidden_dim: 500
+  hidden_dim: 1000
   initializer:
     alpha: 0.8
     mu_u: 0.0
@@ -89,10 +89,10 @@ run:
   action_smoothness_reg_weight_start: 0.0
   action_smoothness_reg_weight_end: 0.0
   action_smoothness_reg_weight_warmup_steps: 20
-  iterations: 150
+  iterations: 200
 
 plotting:
-  render_every: 10
+  render_every: 25
   prediction_animation_unroll: 50  # change back to 50 or so
   prediction_animation_step: 5
 

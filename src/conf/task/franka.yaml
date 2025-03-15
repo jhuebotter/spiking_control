@@ -7,9 +7,9 @@ params:
   max_episode_steps: 200
   render_mode: rgb_array
   dt: 0.02
-  control: velocity
+  control: acceleration
   include_velocity: false
-  max_acceleration: 200.0
+  max_acceleration: 300.0
   dof: 4
   include_sin_cos: false
   render_interval: 1

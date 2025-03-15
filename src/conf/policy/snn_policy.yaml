@@ -3,7 +3,7 @@ defaults:
 
 model:
   params:
-    # num_rec_layers: 1
+    num_rec_layers: 0
     # num_layers: 1
     output:
       kwargs:

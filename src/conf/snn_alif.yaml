@@ -1,7 +1,7 @@
 model:
   type: rsnn
   params:
-    num_rec_layers: ${model.num_rec_layers}
+    # num_rec_layers: ${model.num_rec_layers}
     num_layers: ${model.num_layers}
     hidden_dim: ${model.hidden_dim}
     dt: ${model.time.dt}
