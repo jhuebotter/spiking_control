@@ -48,7 +48,6 @@ class BaseRSNN(nn.Module):
         neuron_kwargs: dict = {},
         readout_type: CellGroup = FastReadoutGroup,
         readout_kwargs: dict = {},
-        output_kwargs: dict = {},
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
@@ -108,18 +107,20 @@ class BaseRSNN(nn.Module):
 
         # make the model
         self.model = RecurrentSpikingModel(device=device)
-        input_group = prev = self.model.add_group(
+        self.input_group = prev = self.model.add_group(
             self.input_type(
-                self.input_dim, name=f"{self.name} Input Group", **self.input_kwargs
+                self.input_dim, 
+                name=f"{self.name} Input Group", 
+                **self.input_kwargs
             )
         )
-        layers = []
+        self.layers = []
         first = True
         for i in range(num_rec_layers):
             new = Layer(
                 name=f"{self.name} Recurrent LIF Cell Group {i+1}",
                 model=self.model,
-                size=self.hidden_dim[len(layers)],
+                size=self.hidden_dim[len(self.layers)],
                 input_group=prev,
                 recurrent=True,
                 regs=self.regularizers,
@@ -132,7 +133,7 @@ class BaseRSNN(nn.Module):
                 recurrent_connection_kwargs=self.connection_kwargs,
             )
             first = False
-            layers.append(new)
+            self.layers.append(new)
             self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
@@ -171,7 +172,7 @@ class BaseRSNN(nn.Module):
             new = Layer(
                 name=f"{self.name} FF LIF Cell Group {i+1}",
                 model=self.model,
-                size=hidden_dim[len(layers)],
+                size=hidden_dim[len(self.layers)],
                 input_group=prev,
                 recurrent=False,
                 regs=self.regularizers,
@@ -182,7 +183,7 @@ class BaseRSNN(nn.Module):
                 connection_kwargs=dict(bias=True) if first else self.connection_kwargs,
             )
             first = False
-            layers.append(new)
+            self.layers.append(new)
             self.model.add_monitor(
                 PlotStateMonitor(
                     new.output_group,
@@ -219,35 +220,44 @@ class BaseRSNN(nn.Module):
             prev = new.output_group
 
         # make the readout
-        readout_connection_kwargs = self.connection_kwargs.copy()
-        readout_connection_kwargs["bias"] = False
+        #readout_connection_kwargs = self.connection_kwargs.copy()
+        readout_connection_kwargs = {"bias" : False}
         new = Layer(
-            name=f"{self.name} Readout Pool Layer",
+            name=f"{self.name} Readout Layer",
             model=self.model,
-            size=self.output_dim * readout_kwargs["n_readouts"],
+            size=self.output_dim,
             input_group=prev,
             recurrent=False,
-            regs=[],
             w_regs=self.w_regularizers,
-            connection_class=self.connection_type,
+            #connection_class=self.connection_type, #! I do not want a bottleneck here
             neuron_class=self.readout_type,
             neuron_kwargs=self.readout_kwargs,
             connection_kwargs=readout_connection_kwargs,
         )
-        layers.append(new)
+        self.layers.append(new)
+        self.output_group = new.output_group
+
+        self.model.add_monitor(
+            PlotStateMonitor(
+                self.output_group,
+                "mem",
+                plot_fn=plot_traces,
+                title=f"{self.name} Readout Layer",
+            )
+        )
         self.model.add_monitor(
             PlotStateMonitor(
                 new.output_group,
                 "out",
                 plot_fn=plot_traces,
-                title=f"{self.name} Readout Pool Layer",
+                title=f"{self.name} Readout Layer",
             )
         )
-        prev = new.output_group
 
+        """
         # make the readout
-        if self.out_style == "mean":
-            output_group = new = self.model.add_group(
+        if self.out_style.lower() == "mean":
+            self.output_group = new = self.model.add_group(
                 TimeAverageReadoutGroup(
                     self.output_dim,
                     steps=self.repeat_input,
@@ -256,18 +266,20 @@ class BaseRSNN(nn.Module):
                 )
             )
 
-        elif self.out_style == "last":
-            output_group = new = self.model.add_group(
+        elif self.out_style.lower() == "last":
+            self.output_group = new = self.model.add_group(
                 DirectReadoutGroup(
                     self.output_dim,
                     name=f"{self.name} Direct Readout Group",
                     **output_kwargs,
                 )
             )
-
+        else:
+            raise ValueError(f"Unknown output style {self.out_style}.")
+        
         self.model.add_monitor(
             PlotStateMonitor(
-                output_group,
+                self.output_group,
                 "mem",
                 plot_fn=plot_traces,
                 title=f"{self.name} Average Readout Layer",
@@ -276,7 +288,7 @@ class BaseRSNN(nn.Module):
 
         self.model.add_monitor(
             PlotStateMonitor(
-                output_group,
+                self.output_group,
                 "out",
                 plot_fn=plot_traces,
                 title=f"{self.name} Average Readout Layer",
@@ -287,36 +299,37 @@ class BaseRSNN(nn.Module):
             Connection(prev, new, bias=False, requires_grad=False)
         )
         readout_initializer = AverageInitializer()
+        """
 
         # configure the model
         # TODO: Rework how optimizers work!
         self.model.configure(
-            input_group,
-            output_group,
+            self.input_group,
+            self.output_group,
             time_step=self.dt,
         )
 
-        for layer in layers:
+        for layer in self.layers:
             self.initializer.initialize(layer)
-        con.init_parameters(readout_initializer)
+        #con.init_parameters(readout_initializer)
 
         self.model.add_monitor(
             PropertyMonitor(
-                input_group,
-                "scaling",
+                self.input_group,
+                "input_scale",
             )
         )
 
         self.model.add_monitor(
             PropertyMonitor(
-                output_group,
+                self.output_group,
                 "weight_scale",
             )
         )
 
         self.model.add_monitor(
             PropertyMonitor(
-                output_group,
+                self.output_group,
                 "output_scale",
             )
         )

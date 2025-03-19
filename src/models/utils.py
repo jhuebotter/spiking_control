@@ -120,8 +120,8 @@ def make_policy_model(
             }
         )
         # add an additional regularizer for the output layer if tanh activation is used
-        if params["output_kwargs"].get("apply_tanh", None) == True:
-            params["output_kwargs"].update(
+        if params["readout_kwargs"].get("apply_tanh", None) == True:
+            params["readout_kwargs"].update(
                 {
                     "regularizers": [
                         LowerBoundL2(
@@ -168,11 +168,11 @@ def make_prnn_objects(config: DictConfig) -> dict:
     object_dict["input_scaler"] = input_scaler
 
     output_scaler = OutputScaler(
-        weight_scale=config.params.output.kwargs.get("weight_scale", 1.0),
-        output_scale=config.params.output.kwargs.get("output_scale", 1.0),
-        learn_weight_scale=config.params.output.kwargs.get("learn_weight_scale", False),
-        learn_output_scale=config.params.output.kwargs.get("learn_output_scale", False),
-        apply_tanh=config.params.output.kwargs.get("apply_tanh", False),
+        weight_scale=config.params.readout.kwargs.get("weight_scale", 1.0),
+        output_scale=config.params.readout.kwargs.get("output_scale", 1.0),
+        learn_weight_scale=config.params.readout.kwargs.get("learn_weight_scale", False),
+        learn_output_scale=config.params.readout.kwargs.get("learn_output_scale", False),
+        apply_tanh=config.params.readout.kwargs.get("apply_tanh", False),
     )
     object_dict["output_scaler"] = output_scaler
 
@@ -195,8 +195,7 @@ def make_snn_objects(config: DictConfig) -> dict:
         params.pop("readout_type")
     params["input_kwargs"] = config.params.input.get("kwargs", {})
     params["neuron_kwargs"] = config.params.neuron.get("kwargs", {})
-    params["readout_kwargs"] = config.params.readout.get("kwargs", {})
-    params["output_kwargs"] = {**config.params.output.get("kwargs", {})}
+    params["readout_kwargs"] = OmegaConf.to_object(config.params.readout).get("kwargs", {})
 
     # make the activation function
     params["activation"] = make_act_fn(

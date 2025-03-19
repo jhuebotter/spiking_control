@@ -5,14 +5,14 @@ model:
     num_layers: ${model.num_layers}
     hidden_dim: ${model.hidden_dim}
     dt: ${model.time.dt}
-    repeat_input: 8
+    repeat_input: ${model.repeat_input}
     out_style: last
     encoder: ${model.encoder}
     input:
       type: input
       kwargs: 
-        scaling: ${model.input.scaling}
-        learn_scaling: ${model.input.learn_scaling}
+        input_scale: ${model.input.input_scale}
+        learn_input_scale: ${model.input.learn_input_scale}
     neuron:
       type: alif
       kwargs:
@@ -31,7 +31,6 @@ model:
       kwargs:
         tau_mem: ${model.time.tau_mem}
         tau_syn: ${model.time.tau_syn}
-        n_readouts: 1
     connection:
       kwargs:
         bias: true

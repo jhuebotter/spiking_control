@@ -1,5 +1,5 @@
 defaults:
-  - task: franka
+  - task: reacher
   - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
@@ -11,8 +11,8 @@ experiment: test
 device: cuda
 
 model:
+  repeat_input: 8
   num_layers: 2
-  # num_rec_layers: 1
   time:
     dt: 0.002
     tau_mem: 0.02
@@ -23,7 +23,7 @@ model:
   connection:
     n_dims: null
     latent_bias: false
-  hidden_dim: 1000
+  hidden_dim: 500
   initializer:
     alpha: 0.8
     mu_u: 0.0
@@ -43,8 +43,8 @@ model:
     #    sigma_scale: 0.5
     #    learn_sigma: false
   input:
-    scaling: 0.5
-    learn_scaling: true
+    input_scale: 0.5
+    learn_input_scale: true
 
 optimizer:
   type: adam
@@ -52,12 +52,12 @@ optimizer:
     lr: 0.002
 
 LowerBoundL2:
-  strength: 0.001
+  strength: 0.01
   threshold: -20
   basis: mem
   dims: null   # null means per neuron, 1 means avg per layer
 UpperBoundL2:
-  strength: 0.001
+  strength: 0.01
   threshold: 0.3
   basis: out
   dims: null
@@ -84,10 +84,10 @@ run:
   action_noise_std: 0.0
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0
-  action_reg_weight_end: 0.01
+  action_reg_weight_end: 0.0
   action_reg_weight_warmup_steps: 20
   action_smoothness_reg_weight_start: 0.0
-  action_smoothness_reg_weight_end: 0.01
+  action_smoothness_reg_weight_end: 0.0
   action_smoothness_reg_weight_warmup_steps: 20
   iterations: 200
 

@@ -5,7 +5,7 @@ model:
   params:
     num_rec_layers: 1
     # num_layers: 1
-    output:
+    readout:
       kwargs:
         weight_scale: 0.005
         output_scale: 1.0

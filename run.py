@@ -11,43 +11,39 @@ from src.utils import (
     id_generator,
 )
 from src.agents import PredictiveControlAgent
-from src.loggers import (
-    WandBLogger,
-    ConsoleLogger,
-    PandasLogger,
-    MediaLogger
-)
+from src.loggers import WandBLogger, ConsoleLogger, PandasLogger, MediaLogger
 
 OmegaConf.register_new_resolver("mul", lambda a, b: int(a) * int(b))
 
-@hydra.main(version_base='1.3', config_path='src/conf', config_name='config_test')
-def main(cfg : DictConfig) -> None:
-    
+
+@hydra.main(version_base="1.3", config_path="src/conf", config_name="config_test")
+def main(cfg: DictConfig) -> None:
+
     # print the config
-    print('### run config ###')
+    print("### run config ###")
     print(OmegaConf.to_yaml(cfg))
 
     # get the output directory
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
-    out_dir = hydra_cfg['runtime']['output_dir']
-    experiment_dir = Path('outputs', cfg.experiment)
-    config_path = Path(out_dir, '.hydra', 'config.yaml')
-    print('output directory:', out_dir)
+    out_dir = hydra_cfg["runtime"]["output_dir"]
+    experiment_dir = Path("outputs", cfg.experiment)
+    config_path = Path(out_dir, ".hydra", "config.yaml")
+    print("output directory:", out_dir)
 
     # make the loggers
     pretty.install()
     loggers = []
-    
+
     # initialize wandb
     if cfg.logging.wandb.use:
-        print('wandb logger is used!')
+        print("wandb logger is used!")
         config_dict = conf_to_dict(cfg)
         run = wandb.init(
-            project=cfg.logging.wandb.project, 
+            project=cfg.logging.wandb.project,
             entity=cfg.logging.wandb.entity,
             config=config_dict,
             dir=out_dir,
-            )
+        )
         # create a symlink to the config file
         run_id = run.id
         Path(wandb.run.dir, "hydra-config.yaml").symlink_to(config_path)
@@ -55,28 +51,28 @@ def main(cfg : DictConfig) -> None:
     else:
         run = None
         run_id = id_generator()
-        print('wandb logger is not used!')
+        print("wandb logger is not used!")
 
     # make a console logger
     if cfg.logging.console.use:
-        print('console logger is used!')
+        print("console logger is used!")
         loggers.append(ConsoleLogger())
 
     # make a pandas logger
     if cfg.logging.pandas.use:
-        print('pandas logger is used!')
+        print("pandas logger is used!")
         loggers.append(PandasLogger(out_dir, cfg=cfg))
 
     # make an experiment pandas logger
-    if cfg.logging.pandas.use:
-        print('experiment pandas logger is used!')
-        loggers.append(PandasLogger(experiment_dir, cfg=cfg))
+    # if cfg.logging.pandas.use:
+    #    print('experiment pandas logger is used!')
+    #    loggers.append(PandasLogger(experiment_dir, cfg=cfg))
 
     # make a media logger
     if cfg.logging.media.use:
-        print('media logger is used!')
+        print("media logger is used!")
         loggers.append(MediaLogger(out_dir, run=run))
-    
+
     # set the device
     device = get_device(cfg.device)
 
@@ -92,9 +88,9 @@ def main(cfg : DictConfig) -> None:
 
     # make the models
     agent = PredictiveControlAgent(
-        env=env, 
-        config=cfg, 
-        device=device, 
+        env=env,
+        config=cfg,
+        device=device,
         loggers=loggers,
         dir=out_dir,
         eval_env=eval_env,
@@ -106,7 +102,7 @@ def main(cfg : DictConfig) -> None:
     if load_dir is not None:
         load_dir = Path(load_dir)
         if not load_dir.exists():
-            raise ValueError(f'load directory {load_dir} does not exist!')
+            raise ValueError(f"load directory {load_dir} does not exist!")
         agent.load_models(load_dir)
 
     # watch the model with wandb
@@ -122,6 +118,6 @@ def main(cfg : DictConfig) -> None:
         wandb.finish()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     main()
