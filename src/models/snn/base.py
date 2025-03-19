@@ -74,7 +74,7 @@ class BaseRSNN(nn.Module):
         self.num_ff_layers = num_ff_layers
         self.num_layers = num_rec_layers + num_ff_layers
         if isinstance(hidden_dim, int):
-            hidden_dim = [hidden_dim] * self.num_layers
+            hidden_dim = [hidden_dim] * (self.num_layers - 1) + [hidden_dim // 2]
         assert len(hidden_dim) == self.num_layers
         self.hidden_dim = hidden_dim
         self.repeat_input = repeat_input

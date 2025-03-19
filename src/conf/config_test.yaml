@@ -52,13 +52,13 @@ optimizer:
     lr: 0.002
 
 LowerBoundL2:
-  strength: 0.01
+  strength: 0.0
   threshold: -20
   basis: mem
   dims: null   # null means per neuron, 1 means avg per layer
 UpperBoundL2:
   strength: 0.01
-  threshold: 0.3
+  threshold: 0.2
   basis: out
   dims: null
 transition:
@@ -70,7 +70,7 @@ run:
   encoder1: identity
   encoder2: identity
   load_dir: null
-  prediction_unroll: 20
+  prediction_unroll: 30
   eval_first: true
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
@@ -84,12 +84,12 @@ run:
   action_noise_std: 0.0
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0
-  action_reg_weight_end: 0.0
+  action_reg_weight_end: 0.01
   action_reg_weight_warmup_steps: 20
   action_smoothness_reg_weight_start: 0.0
-  action_smoothness_reg_weight_end: 0.0
+  action_smoothness_reg_weight_end: 0.01
   action_smoothness_reg_weight_warmup_steps: 20
-  iterations: 200
+  iterations: 100
 
 plotting:
   render_every: 25
