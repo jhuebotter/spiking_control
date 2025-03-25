@@ -1,5 +1,5 @@
 defaults:
-  - task: reacher
+  - task: franka
   - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
@@ -11,7 +11,7 @@ experiment: test
 device: cuda
 
 model:
-  repeat_input: 8
+  repeat_input: 7
   num_layers: 2
   time:
     dt: 0.002
@@ -52,13 +52,13 @@ optimizer:
     lr: 0.002
 
 LowerBoundL2:
-  strength: 0.0
+  strength: 0.001
   threshold: -20
   basis: mem
   dims: null   # null means per neuron, 1 means avg per layer
 UpperBoundL2:
-  strength: 0.01
-  threshold: 0.2
+  strength: 0.001
+  threshold: 0.3
   basis: out
   dims: null
 transition:
@@ -70,7 +70,7 @@ run:
   encoder1: identity
   encoder2: identity
   load_dir: null
-  prediction_unroll: 30
+  prediction_unroll: 50
   eval_first: true
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
@@ -87,13 +87,13 @@ run:
   action_reg_weight_end: 0.01
   action_reg_weight_warmup_steps: 20
   action_smoothness_reg_weight_start: 0.0
-  action_smoothness_reg_weight_end: 0.01
+  action_smoothness_reg_weight_end: 0.001
   action_smoothness_reg_weight_warmup_steps: 20
-  iterations: 100
+  iterations: 150
 
 plotting:
   render_every: 25
-  prediction_animation_unroll: 50  # change back to 50 or so
+  prediction_animation_unroll: 50
   prediction_animation_step: 5
 
 learning:

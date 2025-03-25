@@ -270,10 +270,11 @@ def load_weights_from_disk(
 class BaseScheduler:
     """
     Base scheduler class.
-    
+
     Provides a default interface with reset, step, and get_value methods.
     The default get_value simply returns the start value.
     """
+
     def __init__(self, start: float, end: float, warmup_steps: int = 0):
         self.start = start
         self.end = end
@@ -302,19 +303,26 @@ class BaseScheduler:
 class LinearScheduler(BaseScheduler):
     """
     Linearly interpolates from start to end after an optional warmup period.
-    
+
     For t < warmup_steps, get_value() returns start.
     For t >= warmup_steps:
       Let effective_step = t - warmup_steps.
       If effective_step >= total_steps, returns end.
       Otherwise returns:
           start + (end - start) * (effective_step / total_steps)
-    
+
     Args:
         total_steps (int): Number of steps over which to interpolate after warmup.
                            (At effective_step == total_steps, the scheduler returns end.)
     """
-    def __init__(self, start: float = 1.0, end: float = 0.0, warmup_steps: int = 0, total_steps: int = 100):
+
+    def __init__(
+        self,
+        start: float = 1.0,
+        end: float = 0.0,
+        warmup_steps: int = 0,
+        total_steps: int = 100,
+    ):
         super().__init__(start, end, warmup_steps)
         self.total_steps = total_steps
 
@@ -324,26 +332,35 @@ class LinearScheduler(BaseScheduler):
         effective_step = self.current_step - self.warmup_steps
         if effective_step >= self.total_steps:
             return self.end
-        return self.start + (self.end - self.start) * (effective_step / self.total_steps)
+        return self.start + (self.end - self.start) * (
+            effective_step / self.total_steps
+        )
 
 
 class ExponentialScheduler(BaseScheduler):
     """
     Exponential scheduler that supports both decay and increase, with an optional warmup period.
-    
+
     For t < warmup_steps, get_value() returns start.
     For t >= warmup_steps:
       If start >= end (decay):
           v(t) = end + (start - end) * gamma^(t - warmup_steps)
       If start < end (increase):
           v(t) = start + (end - start) * (1 - gamma^(t - warmup_steps))
-    
+
     This behavior is identical to your current implementation.
-    
+
     Args:
         gamma (float): Multiplicative factor (should be between 0 and 1).
     """
-    def __init__(self, start: float = 1.0, end: float = 0.0, gamma: float = 0.97, warmup_steps: int = 0):
+
+    def __init__(
+        self,
+        start: float = 1.0,
+        end: float = 0.0,
+        gamma: float = 0.97,
+        warmup_steps: int = 0,
+    ):
         super().__init__(start, end, warmup_steps)
         self.gamma = gamma
 
@@ -352,18 +369,21 @@ class ExponentialScheduler(BaseScheduler):
             return self.start
         effective_step = self.current_step - self.warmup_steps
         if self.start >= self.end:
-            return self.end + (self.start - self.end) * (self.gamma ** effective_step)
+            return self.end + (self.start - self.end) * (self.gamma**effective_step)
         else:
-            return self.start + (self.end - self.start) * (1 - self.gamma ** effective_step)
+            return self.start + (self.end - self.start) * (
+                1 - self.gamma**effective_step
+            )
 
 
 class StepScheduler(BaseScheduler):
     """
     Step scheduler that, after an optional warmup period, immediately returns a constant value.
-    
+
     For t < warmup_steps, get_value() returns start.
     For t >= warmup_steps, get_value() returns end.
     """
+
     def __init__(self, start: float = 1.0, end: float = 0.0, warmup_steps: int = 0):
         super().__init__(start, end, warmup_steps)
 
@@ -371,22 +391,23 @@ class StepScheduler(BaseScheduler):
         if self.current_step < self.warmup_steps:
             return self.start
         return self.end
-    
+
 
 class LRSchedulerWrapper:
     """
     A learning rate scheduler wrapper that updates the optimizer's learning rates using a custom scheduler.
 
-    This wrapper takes an optimizer and a scheduler instance (a subclass of BaseScheduler). 
-    On each step, it calls the scheduler to obtain the new learning rate(s) and updates each parameter 
+    This wrapper takes an optimizer and a scheduler instance (a subclass of BaseScheduler).
+    On each step, it calls the scheduler to obtain the new learning rate(s) and updates each parameter
     group in the optimizer accordingly. The scheduler's get_value() method is still available for logging.
 
     It supports both scalar and list-like inputs for start, end, and decay parameters.
     """
+
     def __init__(self, optimizer: torch.optim.Optimizer, scheduler: BaseScheduler):
         self.optimizer = optimizer
         self.scheduler = scheduler
-        
+
         # Initialize each parameter group's learning rate based on the scheduler's starting value.
         initial_lr = self.scheduler.get_value()
         if isinstance(initial_lr, (int, float)):

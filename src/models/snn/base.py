@@ -74,7 +74,8 @@ class BaseRSNN(nn.Module):
         self.num_ff_layers = num_ff_layers
         self.num_layers = num_rec_layers + num_ff_layers
         if isinstance(hidden_dim, int):
-            hidden_dim = [hidden_dim] * (self.num_layers - 1) + [hidden_dim // 2]
+            #hidden_dim = [hidden_dim] * (self.num_layers - 1) + [hidden_dim // 2]
+            hidden_dim = [hidden_dim] * self.num_layers
         assert len(hidden_dim) == self.num_layers
         self.hidden_dim = hidden_dim
         self.repeat_input = repeat_input
@@ -254,52 +255,6 @@ class BaseRSNN(nn.Module):
             )
         )
 
-        """
-        # make the readout
-        if self.out_style.lower() == "mean":
-            self.output_group = new = self.model.add_group(
-                TimeAverageReadoutGroup(
-                    self.output_dim,
-                    steps=self.repeat_input,
-                    name=f"{self.name} Time Average Readout Group",
-                    **output_kwargs,
-                )
-            )
-
-        elif self.out_style.lower() == "last":
-            self.output_group = new = self.model.add_group(
-                DirectReadoutGroup(
-                    self.output_dim,
-                    name=f"{self.name} Direct Readout Group",
-                    **output_kwargs,
-                )
-            )
-        else:
-            raise ValueError(f"Unknown output style {self.out_style}.")
-        
-        self.model.add_monitor(
-            PlotStateMonitor(
-                self.output_group,
-                "mem",
-                plot_fn=plot_traces,
-                title=f"{self.name} Average Readout Layer",
-            )
-        )
-
-        self.model.add_monitor(
-            PlotStateMonitor(
-                self.output_group,
-                "out",
-                plot_fn=plot_traces,
-                title=f"{self.name} Average Readout Layer",
-            )
-        )
-
-        con = self.model.add_connection(
-            Connection(prev, new, bias=False, requires_grad=False)
-        )
-        readout_initializer = AverageInitializer()
-        """
 
         # configure the model
         # TODO: Rework how optimizers work!
@@ -324,13 +279,6 @@ class BaseRSNN(nn.Module):
             PropertyMonitor(
                 self.output_group,
                 "weight_scale",
-            )
-        )
-
-        self.model.add_monitor(
-            PropertyMonitor(
-                self.output_group,
-                "output_scale",
             )
         )
 

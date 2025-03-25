@@ -7,7 +7,7 @@ from ..utils import (
     FrameStack,
     ExponentialScheduler,
     StepScheduler,
-    LRSchedulerWrapper,
+    LRSchedulerWrapper
 )
 from src.eval_helpers import baseline_prediction
 
@@ -18,7 +18,7 @@ from tqdm import tqdm
 from typing import Optional
 from pathlib import Path
 from copy import deepcopy
-from src.plotting import render_video, animate_predictions
+from src.plotting import render_video, animate_predictions, TrajectoryPlotter
 
 
 class PredictiveControlAgent(BaseAgent):
@@ -447,8 +447,9 @@ class PredictiveControlAgent(BaseAgent):
         for batch in pbar:
             transition_result = self.transition_model.train_fn(
                 memory=self.memory,
-                record=True,
-                excluded_monitor_keys=self.transition_model.plot_monitors,
+                record=False,  # True,
+                excluded_monitor_keys=self.transition_model.plot_monitors
+                + self.transition_model.numeric_monitors,
                 teacher_forcing_p=teacher_forcing_p,
                 **self.transition_config.get("learning", {}).get("params", {}),
             )
@@ -476,8 +477,9 @@ class PredictiveControlAgent(BaseAgent):
                 loss_gain=self.env.unwrapped.call("get_loss_gain")[0],
                 action_reg_weight=action_reg_weight,
                 action_smoothness_reg_weight=action_smoothness_reg_weight,
-                record=True,
-                excluded_monitor_keys=self.policy_model.plot_monitors,
+                record=False,  # True,
+                excluded_monitor_keys=self.policy_model.plot_monitors
+                + self.policy_model.numeric_monitors,
                 **self.policy_config.get("learning", {}).get("params", {}),
             )
             self.policy_updates += 1
@@ -673,7 +675,7 @@ class PredictiveControlAgent(BaseAgent):
 
             if not self.manual_video and render:
                 env.stop_recording()
-
+            
         # log the results
         average_reward = total_reward / len(completed_episodes)
         if len(success_tracker) > 0:
@@ -704,8 +706,24 @@ class PredictiveControlAgent(BaseAgent):
             "test average cumulative distance": average_cumulative_distance,
         }
 
+        # get some more numeric montior results
+        policy_numeric_monitor_results = self.policy_model.get_monitor_data(
+            exclude=self.policy_model.plot_monitors
+        )
+        transition_numeric_monitor_results = self.transition_model.get_monitor_data(
+            exclude=self.transition_model.plot_monitors
+        )
+        results.update(policy_numeric_monitor_results)
+        results.update(transition_numeric_monitor_results)
+
         # make the video
         if render:
+            trajectory_plotter = TrajectoryPlotter(env)
+            figures, animations = trajectory_plotter(completed_episodes)
+            trajectory_plots = {
+                "test trajectory plots": figures,
+                "test trajectory animations": animations,
+            }
             policy_plots = self.policy_model.get_monitor_data(
                 exclude=self.policy_model.numeric_monitors
             )
@@ -727,6 +745,7 @@ class PredictiveControlAgent(BaseAgent):
             results.update(prediction_videos)
             results.update(policy_plots)
             results.update(transition_plots)
+            results.update(trajectory_plots)
             if self.manual_video:
                 episode_videos = {"test episodes": render_video(completed_framestacks)}
                 results.update(episode_videos)
