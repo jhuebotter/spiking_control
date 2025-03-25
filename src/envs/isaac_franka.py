@@ -194,7 +194,7 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots/Franka/franka_instanceable.usd",
             activate_contact_sensors=False,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                disable_gravity=False,
+                disable_gravity=True,    # ! disable gravity for the robot, THIS IS A TEST!!
                 max_depenetration_velocity=5.0,
             ),
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
