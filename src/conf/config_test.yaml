@@ -1,5 +1,5 @@
 defaults:
-  - task: franka
+  - task: reacher
   - agent: pred_agent
   - policy: snn_policy
   - transition: snn_transition
@@ -28,7 +28,7 @@ model:
     alpha: 0.8
     mu_u: 0.0
     sigma_u: 1.0
-    nu: 50
+    nu: 100
     bias_scale: 1.0
     bias_mean: 0.0
     scaling: 1
@@ -70,7 +70,7 @@ run:
   encoder1: identity
   encoder2: identity
   load_dir: null
-  prediction_unroll: 50
+  prediction_unroll: 20
   eval_first: true
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
@@ -85,10 +85,10 @@ run:
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0
   action_reg_weight_end: 0.01
-  action_reg_weight_warmup_steps: 20
+  action_reg_weight_warmup_steps: 0
   action_smoothness_reg_weight_start: 0.0
   action_smoothness_reg_weight_end: 0.001
-  action_smoothness_reg_weight_warmup_steps: 20
+  action_smoothness_reg_weight_warmup_steps: 0
   iterations: 150
 
 plotting:

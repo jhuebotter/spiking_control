@@ -129,8 +129,8 @@ def animate_prediction(
     warmup: int = 0,
     step: int = 10,
     fps: int = 30,
-    dpi: int = 50,
-    font_size: int = 12,
+    dpi: int = 100,
+    fontsize: int = 12,
     save: Optional[Union[Path, str]] = "",
 ) -> object:
     """animate predictions and save to disk
@@ -141,14 +141,14 @@ def animate_prediction(
         warmup: number of steps to warmup the model
         fps: frames per second
         dpi: dots per inch
-        font_size: font size for the legend
+        fontsize: font size for the legend
         save: path to save the video to
 
     Returns:
         animation object
     """
 
-    plt.rcParams["font.size"] = f"{font_size}"
+    # plt.rcParams["font.size"] = f"{fontsize}"
 
     T, h, D = predictions.shape
     T = T * step
@@ -163,8 +163,9 @@ def animate_prediction(
     # make an initial snapshot without prediction
     for d in range(D):
         ax[d].plot([o[d] for o in next_states], c="g", alpha=0.5)
-        ax[d].set_ylabel(labels[d])
-    ax[-1].set_xlabel("step")
+        ax[d].set_ylabel(labels[d], fontsize=fontsize)
+        ax[d].tick_params(axis="both", which="major", labelsize=fontsize)
+    ax[-1].set_xlabel("step", fontsize=fontsize)
     plt.tight_layout()
 
     camera.snap()
@@ -290,10 +291,10 @@ def colorline3d(
     return lc
 
 
-def add_buffer_limit(ax, lower, upper, axis='x'):
+def add_buffer_limit(ax, lower, upper, axis="x"):
     """
     Set the limits for a single axis with a 10% buffer on each side.
-    
+
     Parameters:
       ax: The matplotlib axis object.
       lower: The lower limit.
@@ -304,11 +305,11 @@ def add_buffer_limit(ax, lower, upper, axis='x'):
     if rng == 0:
         rng = 1.0
     buf = 0.1 * rng
-    if axis == 'x':
+    if axis == "x":
         ax.set_xlim(lower - buf, upper + buf)
-    elif axis == 'y':
+    elif axis == "y":
         ax.set_ylim(lower - buf, upper + buf)
-    elif axis == 'z':
+    elif axis == "z":
         ax.set_zlim(lower - buf, upper + buf)
 
 
@@ -361,9 +362,19 @@ def add_buffer_limits(
         ax.set_zlim(z_min - z_buffer, z_max + z_buffer)
 
 
-def plot_trajectory_2d(position, target, cmap='rainbow', figsize=(4, 6), remove_ticks=True, remove_labels=True,
-                       show_colorbar=False, ax_lim:Optional[float]=1.1,
-                       position_marker=True, target_marker=True, base_marker=True):
+def plot_trajectory_2d(
+    position,
+    target,
+    cmap="rainbow",
+    figsize=(3, 4.5),
+    remove_ticks=True,
+    remove_labels=True,
+    show_colorbar=False,
+    ax_lim: Optional[float] = 1.1,
+    position_marker=True,
+    target_marker=True,
+    base_marker=True,
+):
     """
     Creates a 2D plot of the trajectory (position) and target trajectory in the top subplot,
     and below it a plot of the Euclidean distance between position and target over time.
@@ -373,79 +384,126 @@ def plot_trajectory_2d(position, target, cmap='rainbow', figsize=(4, 6), remove_
     Returns the figure and axes.
     """
     # --- Change: Create two subplots instead of one ---
-    fig, (ax_traj, ax_dist) = plt.subplots(2, 1, figsize=figsize, gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax_traj, ax_dist) = plt.subplots(
+        2, 1, figsize=figsize, gridspec_kw={"height_ratios": [3, 1]}
+    )
     T = position.shape[0]
     t = np.linspace(0, 1, T)
-    
+
     # --- Top subplot: Trajectory plot ---
     plt.sca(ax_traj)  # Set current axis to ax_traj.
-    lc = colorline2d(position[:,0], position[:,1], z=t, cmap=cmap)
-    colorline2d(target[:,0], target[:,1], z=t, cmap=cmap)
+    lc = colorline2d(position[:, 0], position[:, 1], z=t, cmap=cmap)
+    colorline2d(target[:, 0], target[:, 1], z=t, cmap=cmap)
 
     # Draw original markers with requested colors, symbols, and outlines.
     if base_marker:
-        ax_traj.scatter(0, 0, color='green', s=50, marker='P', label='Base',
-                        edgecolor='black', linewidth=0.5)
+        ax_traj.scatter(
+            0,
+            0,
+            color="green",
+            s=50,
+            marker="P",
+            label="Base",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if target_marker:
-        ax_traj.scatter(target[-1,0], target[-1,1], color='red', s=50, marker='*', 
-                        label='Target', edgecolor='black', linewidth=0.5)
+        ax_traj.scatter(
+            target[-1, 0],
+            target[-1, 1],
+            color="red",
+            s=100,
+            marker="*",
+            label="Target",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if position_marker:
-        ax_traj.scatter(position[0,0], position[0,1], color='yellow', s=50, marker='o', 
-                        label='Start Position', edgecolor='black', linewidth=0.5)
-        ax_traj.scatter(position[-1,0], position[-1,1], color='blue', s=50, marker='X', 
-                        label='Final Position', edgecolor='black', linewidth=0.5)
-    
+        ax_traj.scatter(
+            position[0, 0],
+            position[0, 1],
+            color="yellow",
+            s=50,
+            marker="o",
+            label="Start Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+        ax_traj.scatter(
+            position[-1, 0],
+            position[-1, 1],
+            color="blue",
+            s=50,
+            marker="X",
+            label="Final Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+
     # Set axis limits for 2D plot.
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
         ax_traj.set_ylim(-ax_lim, ax_lim)
     else:
-        x_min = min(position[:,0].min(), target[:,0].min())
-        x_max = max(position[:,0].max(), target[:,0].max())
-        y_min = min(position[:,1].min(), target[:,1].min())
-        y_max = max(position[:,1].max(), target[:,1].max())
+        x_min = min(position[:, 0].min(), target[:, 0].min())
+        x_max = max(position[:, 0].max(), target[:, 0].max())
+        y_min = min(position[:, 1].min(), target[:, 1].min())
+        y_max = max(position[:, 1].max(), target[:, 1].max())
         add_buffer_limits(ax_traj, x_min, x_max, y_min, y_max)
-    ax_traj.set_aspect('equal')
-    
+    ax_traj.set_aspect("equal")
+
     if remove_ticks:
         ax_traj.set_xticks([])
         ax_traj.set_yticks([])
-    
+
     if remove_labels:
-        ax_traj.set_xlabel('')
-        ax_traj.set_ylabel('')
+        ax_traj.set_xlabel("")
+        ax_traj.set_ylabel("")
     else:
         ax_traj.set_xlabel("X")
         ax_traj.set_ylabel("Y")
 
     if show_colorbar:
         cb = plt.colorbar(lc, ax=ax_traj, ticks=[0, 1], label="Normalized Time")
-        cb.ax.set_yticklabels(['Start', 'End'])
+        cb.ax.set_yticklabels(["Start", "End"])
 
-    ax_traj.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, 1.2), ncol=2)
-    
+    ax_traj.legend(
+        frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.25), ncol=2
+    )
+
     # --- New: Bottom subplot: Distance over time ---
     distance = compute_distance(position, target)
     plt.sca(ax_dist)  # Set current axis to ax_dist.
     colorline2d(t, distance, z=t, cmap=cmap)
-    
+
     ax_dist.set_xticks([t[0], t[-1]])
-    ax_dist.set_xticklabels(['Start', 'End'])
+    ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
-    ax_dist.spines['top'].set_visible(False)
-    ax_dist.spines['right'].set_visible(False)
-    
+    ax_dist.spines["top"].set_visible(False)
+    ax_dist.spines["right"].set_visible(False)
+
     plt.tight_layout()
     return fig, (ax_traj, ax_dist)
 
 
-def plot_trajectory_3d(position, target, cmap='rainbow', figsize=(4, 6), remove_ticks=True, remove_labels=True, 
-                       show_colorbar=False, ax_lim:Optional[float]=1.1, show_shadows=True,
-                       position_marker=True, target_marker=True, base_marker=True):
+def plot_trajectory_3d(
+    position,
+    target,
+    cmap="rainbow",
+    figsize=(3, 4.5),
+    remove_ticks=True,
+    remove_labels=True,
+    show_colorbar=False,
+    ax_lim: Optional[float] = 1.1,
+    show_shadows=True,
+    position_marker=True,
+    target_marker=True,
+    base_marker=True,
+):
     """
     Creates a 3D plot of the trajectory (position) and target trajectory in the top subplot,
     and below it a 2D plot of the Euclidean distance between position and target over time.
@@ -458,52 +516,96 @@ def plot_trajectory_3d(position, target, cmap='rainbow', figsize=(4, 6), remove_
       - Final Position: red thick x ('X')
     All markers have a thin black outline.
     Additionally, each marker is projected onto the three coordinate planes as a shadow,
-    drawn in black with alpha=0.2 and no outline.
-    
+    drawn in black with alpha=shadow_alpha and no outline.
+
     Returns the figure and axes (tuple: (ax_traj, ax_dist)).
     """
     T = position.shape[0]
     t = np.linspace(0, 1, T)
-    
+
     # Create figure with two subplots: top (3D) and bottom (2D).
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(2, 1, height_ratios=[3, 1])
-    ax_traj = fig.add_subplot(gs[0], projection='3d')
+    ax_traj = fig.add_subplot(gs[0], projection="3d")
     ax_dist = fig.add_subplot(gs[1])
-    
+
     # --- Top subplot: 3D Trajectory ---
     plt.sca(ax_traj)
-    pos_collection = colorline3d(position[:,0], position[:,1], position[:,2], cmap=cmap, norm=plt.Normalize(0,1))
-    #plt.sca(ax_traj)
-    target_collection = colorline3d(target[:,0], target[:,1], target[:,2], cmap=cmap, norm=plt.Normalize(0,1))
-    
+    pos_collection = colorline3d(
+        position[:, 0],
+        position[:, 1],
+        position[:, 2],
+        cmap=cmap,
+        norm=plt.Normalize(0, 1),
+    )
+    # plt.sca(ax_traj)
+    target_collection = colorline3d(
+        target[:, 0], target[:, 1], target[:, 2], cmap=cmap, norm=plt.Normalize(0, 1)
+    )
+
     # Draw original markers with requested colors, symbols, and outlines.
     if base_marker:
-        ax_traj.scatter(0, 0, 0, color='green', s=50, marker='P', label='Base',
-                        edgecolor='black', linewidth=0.5)
+        ax_traj.scatter(
+            0,
+            0,
+            0,
+            color="green",
+            s=50,
+            marker="P",
+            label="Base",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if target_marker:
-        ax_traj.scatter(target[-1,0], target[-1,1], target[-1,2], color='red', s=50, marker='*', 
-                        label='Target', edgecolor='black', linewidth=0.5)
+        ax_traj.scatter(
+            target[-1, 0],
+            target[-1, 1],
+            target[-1, 2],
+            color="red",
+            s=100,
+            marker="*",
+            label="Target",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if position_marker:
-        ax_traj.scatter(position[0,0], position[0,1], position[0,2], color='yellow', s=50, marker='o', 
-                        label='Start Position', edgecolor='black', linewidth=0.5)
-        ax_traj.scatter(position[-1,0], position[-1,1], position[-1,2], color='blue', s=50, marker='X', 
-                        label='Final Position', edgecolor='black', linewidth=0.5)
-    
+        ax_traj.scatter(
+            position[0, 0],
+            position[0, 1],
+            position[0, 2],
+            color="yellow",
+            s=50,
+            marker="o",
+            label="Start Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+        ax_traj.scatter(
+            position[-1, 0],
+            position[-1, 1],
+            position[-1, 2],
+            color="blue",
+            s=50,
+            marker="X",
+            label="Final Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+
     # Set axis limits.
-    z_min = min(position[:,2].min(), target[:,2].min())
-    z_max = max(position[:,2].max(), target[:,2].max())
+    z_min = min(min(position[:, 2].min(), target[:, 2].min()), 0.0)
+    z_max = max(position[:, 2].max(), target[:, 2].max())
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
         ax_traj.set_ylim(-ax_lim, ax_lim)
-        add_buffer_limit(ax_traj, z_min, z_max, axis='z')
+        add_buffer_limit(ax_traj, z_min, z_max, axis="z")
     else:
-        x_min = min(position[:,0].min(), target[:,0].min())
-        x_max = max(position[:,0].max(), target[:,0].max())
-        y_min = min(position[:,1].min(), target[:,1].min())
-        y_max = max(position[:,1].max(), target[:,1].max())
+        x_min = min(position[:, 0].min(), target[:, 0].min())
+        x_max = max(position[:, 0].max(), target[:, 0].max())
+        y_min = min(position[:, 1].min(), target[:, 1].min())
+        y_max = max(position[:, 1].max(), target[:, 1].max())
         add_buffer_limits(ax_traj, x_min, x_max, y_min, y_max, z_min, z_max)
-    
+
     labelpad = 0
     if remove_ticks:
         ax_traj.set_xticklabels([])
@@ -511,22 +613,25 @@ def plot_trajectory_3d(position, target, cmap='rainbow', figsize=(4, 6), remove_
         ax_traj.set_zticklabels([])
         labelpad = -10
     if remove_labels:
-        ax_traj.set_xlabel('')
-        ax_traj.set_ylabel('')
-        ax_traj.set_zlabel('')
+        ax_traj.set_xlabel("")
+        ax_traj.set_ylabel("")
+        ax_traj.set_zlabel("")
     else:
         ax_traj.set_xlabel("X", labelpad=labelpad)
         ax_traj.set_ylabel("Y", labelpad=labelpad)
         ax_traj.set_zlabel("Z", labelpad=labelpad)
-    
+
     if show_colorbar:
-        cb = plt.colorbar(pos_collection, ax=ax_traj, ticks=[0, 1], pad=0.1, label="Normalized Time")
-        cb.ax.set_yticklabels(['Start', 'End'])
-    
-    ax_traj.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=2)
-    
+        cb = plt.colorbar(
+            pos_collection, ax=ax_traj, ticks=[0, 1], pad=0.1, label="Normalized Time"
+        )
+        cb.ax.set_yticklabels(["Start", "End"])
+
+    ax_traj.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.2), ncol=2)
+
     # --- New: Add shadow projections ("shadows") for each marker ---
     if show_shadows:
+        shadow_alpha = 0.1
 
         # Get lower bound for z (XY-plane), maximum y for XZ-plane, and lower bound for x (YZ-plane).
         x_low = ax_traj.get_xlim()[0]
@@ -535,41 +640,151 @@ def plot_trajectory_3d(position, target, cmap='rainbow', figsize=(4, 6), remove_
 
         if base_marker:
             # Base marker shadows: use marker 'P'
-            ax_traj.scatter(0, 0, z_low, color='black', s=50, marker='P', alpha=0.2, depthshade=False)
-            ax_traj.scatter(0, y_high, 0, color='black', s=50, marker='P', alpha=0.2, depthshade=False)
-            ax_traj.scatter(x_low, 0, 0, color='black', s=50, marker='P', alpha=0.2, depthshade=False)
+            ax_traj.scatter(
+                0,
+                0,
+                z_low,
+                color="black",
+                s=50,
+                marker="P",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                0,
+                y_high,
+                0,
+                color="black",
+                s=50,
+                marker="P",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                x_low,
+                0,
+                0,
+                color="black",
+                s=50,
+                marker="P",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
         if target_marker:
             # Target marker shadows: use marker '*'
-            ax_traj.scatter(target[-1,0], target[-1,1], z_low, color='black', s=50, marker='*', alpha=0.2, depthshade=False)
-            ax_traj.scatter(target[-1,0], y_high, target[-1,2], color='black', s=50, marker='*', alpha=0.2, depthshade=False)
-            ax_traj.scatter(x_low, target[-1,1], target[-1,2], color='black', s=50, marker='*', alpha=0.2, depthshade=False)
+            ax_traj.scatter(
+                target[-1, 0],
+                target[-1, 1],
+                z_low,
+                color="black",
+                s=100,
+                marker="*",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                target[-1, 0],
+                y_high,
+                target[-1, 2],
+                color="black",
+                s=100,
+                marker="*",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                x_low,
+                target[-1, 1],
+                target[-1, 2],
+                color="black",
+                s=100,
+                marker="*",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
         if position_marker:
             # Start marker shadows: use marker 'o'
-            ax_traj.scatter(position[0,0], position[0,1], z_low, color='black', s=50, marker='o', alpha=0.2, depthshade=False)
-            ax_traj.scatter(position[0,0], y_high, position[0,2], color='black', s=50, marker='o', alpha=0.2, depthshade=False)
-            ax_traj.scatter(x_low, position[0,1], position[0,2], color='black', s=50, marker='o', alpha=0.2, depthshade=False)
+            ax_traj.scatter(
+                position[0, 0],
+                position[0, 1],
+                z_low,
+                color="black",
+                s=50,
+                marker="o",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                position[0, 0],
+                y_high,
+                position[0, 2],
+                color="black",
+                s=50,
+                marker="o",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                x_low,
+                position[0, 1],
+                position[0, 2],
+                color="black",
+                s=50,
+                marker="o",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
             # Final marker shadows: use marker 'X'
-            ax_traj.scatter(position[-1,0], position[-1,1], z_low, color='black', s=50, marker='X', alpha=0.2, depthshade=False)
-            ax_traj.scatter(position[-1,0], y_high, position[-1,2], color='black', s=50, marker='X', alpha=0.2, depthshade=False)
-            ax_traj.scatter(x_low, position[-1,1], position[-1,2], color='black', s=50, marker='X', alpha=0.2, depthshade=False)
-    
+            ax_traj.scatter(
+                position[-1, 0],
+                position[-1, 1],
+                z_low,
+                color="black",
+                s=50,
+                marker="X",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                position[-1, 0],
+                y_high,
+                position[-1, 2],
+                color="black",
+                s=50,
+                marker="X",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                x_low,
+                position[-1, 1],
+                position[-1, 2],
+                color="black",
+                s=50,
+                marker="X",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+
     # --- Bottom subplot: Distance over time ---
     distance = compute_distance(position, target)
     plt.sca(ax_dist)
     colorline2d(t, distance, z=t, cmap=cmap)
     ax_dist.set_xticks([t[0], t[-1]])
-    ax_dist.set_xticklabels(['Start', 'End'])
+    ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
-    ax_dist.spines['top'].set_visible(False)
-    ax_dist.spines['right'].set_visible(False)
-    
+    ax_dist.spines["top"].set_visible(False)
+    ax_dist.spines["right"].set_visible(False)
+
     # Adjust subplots manually.
-    fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.1, hspace=0.2)
-    
+    fig.subplots_adjust(
+        left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.1, wspace=0.1
+    )
+
     return fig, (ax_traj, ax_dist)
 
 
@@ -603,111 +818,161 @@ def plot_trajectory(position, target, cmap="rainbow", figsize=(7, 6)):
 # Animation Functions (Stable Colors)
 # -------------------------------
 
-def animate_trajectory_2d(position, target, cmap='rainbow', fps: int = 10, 
-                          skip: int = 1, figsize=(4, 6), remove_ticks: bool = True, 
-                          show_colorbar: bool = False,
-                          remove_labels: bool = True, ax_lim: Optional[float] = 1.1,
-                          position_marker: bool = True, target_marker: bool = True, 
-                          base_marker: bool = True):
+
+def animate_trajectory_2d(
+    position,
+    target,
+    cmap="rainbow",
+    fps: int = 10,
+    skip: int = 1,
+    figsize=(3, 4.5),
+    remove_ticks: bool = True,
+    show_colorbar: bool = False,
+    remove_labels: bool = True,
+    ax_lim: Optional[float] = 1.1,
+    position_marker: bool = True,
+    target_marker: bool = True,
+    base_marker: bool = True,
+):
     """
     Animates a 2D trajectory and target along with a lower subplot showing the Euclidean
     distance between them over time. At each frame the markers (target and final position)
     update to reflect the current time step.
-    
+
     Returns the animation object.
     """
     # Create two subplots: top for the trajectory, bottom for the distance plot.
-    fig, (ax_traj, ax_dist) = plt.subplots(2, 1, figsize=figsize, 
-                                           gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax_traj, ax_dist) = plt.subplots(
+        2, 1, figsize=figsize, gridspec_kw={"height_ratios": [3, 1]}
+    )
     T = position.shape[0]
     t = np.linspace(0, 1, T)
-    
+
     # Precompute full segments and fixed color arrays for the trajectory.
-    full_pos_segments = make_segments(position[:,0], position[:,1])
-    full_tar_segments = make_segments(target[:,0], target[:,1])
+    full_pos_segments = make_segments(position[:, 0], position[:, 1])
+    full_tar_segments = make_segments(target[:, 0], target[:, 1])
     full_pos_colors = np.linspace(0, 1, len(full_pos_segments))
     full_tar_colors = np.linspace(0, 1, len(full_tar_segments))
-    
+
     # Precompute the distance and its segments.
     distance = compute_distance(position, target)
     full_dist_segments = make_segments(t, distance)
     full_dist_colors = np.linspace(0, 1, len(full_dist_segments))
-    
+
     # Create empty LineCollections for the trajectory (top subplot)...
-    pos_collection = mcoll.LineCollection([], cmap=cmap, norm=plt.Normalize(0, 1), 
-                                           linewidth=3, alpha=1.0)
-    tar_collection = mcoll.LineCollection([], cmap=cmap, norm=plt.Normalize(0, 1), 
-                                           linewidth=3, alpha=1.0)
+    pos_collection = mcoll.LineCollection(
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+    )
+    tar_collection = mcoll.LineCollection(
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+    )
     ax_traj.add_collection(pos_collection)
     ax_traj.add_collection(tar_collection)
-    
+
     # ...and for the distance plot (bottom subplot).
-    dist_collection = mcoll.LineCollection([], cmap=cmap, norm=plt.Normalize(0, 1), 
-                                            linewidth=3, alpha=1.0)
+    dist_collection = mcoll.LineCollection(
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+    )
     ax_dist.add_collection(dist_collection)
 
     # Draw original markers with requested colors, symbols, and outlines.
     scatter_final, scatter_target = None, None
     if base_marker:
-        ax_traj.scatter(0, 0, color='green', s=50, marker='P', label='Base',
-                        edgecolor='black', linewidth=0.5)
+        ax_traj.scatter(
+            0,
+            0,
+            color="green",
+            s=50,
+            marker="P",
+            label="Base",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if target_marker:
-        scatter_target = ax_traj.scatter(target[-1,0], target[-1,1], color='red', s=50, marker='*', 
-                        label='Target', edgecolor='black', linewidth=0.5)
+        scatter_target = ax_traj.scatter(
+            target[-1, 0],
+            target[-1, 1],
+            color="red",
+            s=100,
+            marker="*",
+            label="Target",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if position_marker:
-        ax_traj.scatter(position[0,0], position[0,1], color='yellow', s=50, marker='o', 
-                        label='Start Position', edgecolor='black', linewidth=0.5)
-        scatter_final = ax_traj.scatter(position[-1,0], position[-1,1], color='blue', s=50, marker='X', 
-                        label='Position', edgecolor='black', linewidth=0.5)
-    
+        ax_traj.scatter(
+            position[0, 0],
+            position[0, 1],
+            color="yellow",
+            s=50,
+            marker="o",
+            label="Start Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+        scatter_final = ax_traj.scatter(
+            position[-1, 0],
+            position[-1, 1],
+            color="blue",
+            s=50,
+            marker="X",
+            label="Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+
     # Set axis limits for the trajectory subplot.
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
         ax_traj.set_ylim(-ax_lim, ax_lim)
     else:
-        x_min = min(position[:,0].min(), target[:,0].min())
-        x_max = max(position[:,0].max(), target[:,0].max())
-        y_min = min(position[:,1].min(), target[:,1].min())
-        y_max = max(position[:,1].max(), target[:,1].max())
+        x_min = min(position[:, 0].min(), target[:, 0].min())
+        x_max = max(position[:, 0].max(), target[:, 0].max())
+        y_min = min(position[:, 1].min(), target[:, 1].min())
+        y_max = max(position[:, 1].max(), target[:, 1].max())
         add_buffer_limits(ax_traj, x_min, x_max, y_min, y_max)
-    ax_traj.set_aspect('equal')
-    
+    ax_traj.set_aspect("equal")
+
     if remove_ticks:
         ax_traj.set_xticks([])
         ax_traj.set_yticks([])
-    
+
     if remove_labels:
-        ax_traj.set_xlabel('')
-        ax_traj.set_ylabel('')
+        ax_traj.set_xlabel("")
+        ax_traj.set_ylabel("")
     else:
         ax_traj.set_xlabel("X")
         ax_traj.set_ylabel("Y")
-    
+
     if show_colorbar:
-        cb = plt.colorbar(pos_collection, ax=ax_traj, ticks=[0, 1], label="Normalized Time")
-        cb.ax.set_yticklabels(['Start', 'End'])
-    
+        cb = plt.colorbar(
+            pos_collection, ax=ax_traj, ticks=[0, 1], label="Normalized Time"
+        )
+        cb.ax.set_yticklabels(["Start", "End"])
+
     # Update legend: no frame, centered above, 2 columns.
-    ax_traj.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, 1.2), ncol=2)
-    
+    ax_traj.legend(
+        frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.25), ncol=2
+    )
+
     # Set axis limits and labels for the distance subplot.
     ax_dist.set_xticks([t[0], t[-1]])
-    ax_dist.set_xticklabels(['Start', 'End'])
+    ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
-    ax_dist.spines['top'].set_visible(False)
-    ax_dist.spines['right'].set_visible(False)
-    
+    ax_dist.spines["top"].set_visible(False)
+    ax_dist.spines["right"].set_visible(False)
+
     plt.tight_layout()
-    
+
     # Build frame indices that skip frames but include the last frame.
     frames = np.arange(0, T, skip)
     if frames[-1] != T - 1:
         frames = np.append(frames, T - 1)
-    
+
     def update(frame):
         if frame < 1:
             pos_collection.set_segments([])
@@ -723,22 +988,47 @@ def animate_trajectory_2d(position, target, cmap='rainbow', fps: int = 10,
             dist_collection.set_array(full_dist_colors[:frame])
             # Update markers to reflect current time step.
             if target_marker and scatter_target is not None:
-                scatter_target.set_offsets(np.array([[target[frame,0], target[frame,1]]]))
+                scatter_target.set_offsets(
+                    np.array([[target[frame, 0], target[frame, 1]]])
+                )
             if position_marker and scatter_final is not None:
-                scatter_final.set_offsets(np.array([[position[frame,0], position[frame,1]]]))
-        return [pos_collection, tar_collection, dist_collection, 
-                scatter_target, scatter_final] if (target_marker or position_marker) else [pos_collection, tar_collection, dist_collection]
-    
-    anim = FuncAnimation(fig, update, frames=frames, interval=1000/fps, 
-                         blit=True, repeat=False)
+                scatter_final.set_offsets(
+                    np.array([[position[frame, 0], position[frame, 1]]])
+                )
+        return (
+            [
+                pos_collection,
+                tar_collection,
+                dist_collection,
+                scatter_target,
+                scatter_final,
+            ]
+            if (target_marker or position_marker)
+            else [pos_collection, tar_collection, dist_collection]
+        )
+
+    anim = FuncAnimation(
+        fig, update, frames=frames, interval=1000 / fps, blit=True, repeat=False
+    )
     return anim
 
 
-def animate_trajectory_3d(position, target, cmap='rainbow', fps: int = 10, 
-                          skip: int = 1, figsize=(4, 6), remove_ticks=True, remove_labels=True, 
-                          show_colorbar=False, show_shadows=True,
-                          ax_lim: Optional[float] = 1.1,
-                          base_marker=True, target_marker=True, position_marker=True):
+def animate_trajectory_3d(
+    position,
+    target,
+    cmap="rainbow",
+    fps: int = 10,
+    skip: int = 1,
+    figsize=(3, 4.5),
+    remove_ticks=True,
+    remove_labels=True,
+    show_colorbar=False,
+    show_shadows=True,
+    ax_lim: Optional[float] = 1.1,
+    base_marker=True,
+    target_marker=True,
+    position_marker=True,
+):
     """
     Animates a 3D trajectory and target along with a lower subplot showing the Euclidean
     distance between them over time. Supports the same marker scheme as the static plot:
@@ -747,80 +1037,116 @@ def animate_trajectory_3d(position, target, cmap='rainbow', fps: int = 10,
       - Start Position: yellow circle ('o')
       - Position: blue thick x ('X')
     All markers have a thin black outline (the final marker has a thicker outline).
-    If show_shadows is True, each marker projects its shadow (in black, alpha=0.2, no outline)
+    If show_shadows is True, each marker projects its shadow (in black, alpha=shadow_alpha, no outline)
     onto the XY-, XZ-, and YZ-planes.
-    
+
     Returns the animation object.
     """
 
     T = position.shape[0]
     t = np.linspace(0, 1, T)
-    
+
     # Create figure with two subplots: top (3D) and bottom (2D).
     fig = plt.figure(figsize=figsize)
     gs = fig.add_gridspec(2, 1, height_ratios=[3, 1])
-    ax_traj = fig.add_subplot(gs[0], projection='3d')
+    ax_traj = fig.add_subplot(gs[0], projection="3d")
     ax_dist = fig.add_subplot(gs[1])
-    
+
     # Precompute full segments and fixed color arrays for the 3D trajectory.
-    full_pos_segments = make_segments3d(position[:,0], position[:,1], position[:,2])
-    full_tar_segments = make_segments3d(target[:,0], target[:,1], target[:,2])
+    full_pos_segments = make_segments3d(position[:, 0], position[:, 1], position[:, 2])
+    full_tar_segments = make_segments3d(target[:, 0], target[:, 1], target[:, 2])
     full_pos_colors = np.linspace(0, 1, len(full_pos_segments))
     full_tar_colors = np.linspace(0, 1, len(full_tar_segments))
-    
+
     # Precompute the distance and its 2D segments.
     distance = compute_distance(position, target)
     full_dist_segments = make_segments(t, distance)
     full_dist_colors = np.linspace(0, 1, len(full_dist_segments))
-    
+
     # Create empty LineCollections for the 3D trajectory.
-    pos_collection = Line3DCollection([], cmap=cmap, norm=plt.Normalize(0, 1), 
-                                        linewidth=3, alpha=1.0)
-    tar_collection = Line3DCollection([], cmap=cmap, norm=plt.Normalize(0, 1), 
-                                        linewidth=3, alpha=1.0)
+    pos_collection = Line3DCollection(
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+    )
+    tar_collection = Line3DCollection(
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+    )
     ax_traj.add_collection(pos_collection)
     ax_traj.add_collection(tar_collection)
-    
+
     # Create empty LineCollection for the distance plot.
-    dist_collection = LineCollection([], cmap=cmap, norm=plt.Normalize(0, 1), 
-                                     linewidth=3, alpha=1.0)
+    dist_collection = LineCollection(
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+    )
     ax_dist.add_collection(dist_collection)
-    
+
     # --- Markers ---
     # Static markers (base and start) remain fixed.
     if base_marker:
-        base_sc = ax_traj.scatter(0, 0, 0, color='green', s=50, marker='P', label='Base',
-                                  edgecolor='black', linewidth=0.5)
+        base_sc = ax_traj.scatter(
+            0,
+            0,
+            0,
+            color="green",
+            s=50,
+            marker="P",
+            label="Base",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     if target_marker:
-        target_sc = ax_traj.scatter(target[0,0], target[0,1], target[0,2], 
-                                    color='red', s=50, marker='*', label='Target',
-                                    edgecolor='black', linewidth=0.5)
+        target_sc = ax_traj.scatter(
+            target[0, 0],
+            target[0, 1],
+            target[0, 2],
+            color="red",
+            s=100,
+            marker="*",
+            label="Target",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     else:
         target_sc = None
     if position_marker:
-        start_sc = ax_traj.scatter(position[0,0], position[0,1], position[0,2], 
-                                   color='yellow', s=50, marker='o', label='Start Position',
-                                   edgecolor='black', linewidth=0.5)
-        final_sc = ax_traj.scatter(position[0,0], position[0,1], position[0,2], 
-                                   color='blue', s=50, marker='X', label='Position',
-                                   edgecolor='black', linewidth=0.5)
+        start_sc = ax_traj.scatter(
+            position[0, 0],
+            position[0, 1],
+            position[0, 2],
+            color="yellow",
+            s=50,
+            marker="o",
+            label="Start Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
+        final_sc = ax_traj.scatter(
+            position[0, 0],
+            position[0, 1],
+            position[0, 2],
+            color="blue",
+            s=50,
+            marker="X",
+            label="Position",
+            edgecolor="black",
+            linewidth=0.5,
+        )
     else:
         final_sc = None
 
     # --- Axis Limits ---
-    z_min = min(position[:,2].min(), target[:,2].min())
-    z_max = max(position[:,2].max(), target[:,2].max())
+    z_min = min(min(position[:, 2].min(), target[:, 2].min()), 0.0)
+    z_max = max(position[:, 2].max(), target[:, 2].max())
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
         ax_traj.set_ylim(-ax_lim, ax_lim)
-        add_buffer_limit(ax_traj, z_min, z_max, axis='z')
+        add_buffer_limit(ax_traj, z_min, z_max, axis="z")
     else:
-        x_min = min(position[:,0].min(), target[:,0].min())
-        x_max = max(position[:,0].max(), target[:,0].max())
-        y_min = min(position[:,1].min(), target[:,1].min())
-        y_max = max(position[:,1].max(), target[:,1].max())
+        x_min = min(position[:, 0].min(), target[:, 0].min())
+        x_max = max(position[:, 0].max(), target[:, 0].max())
+        y_min = min(position[:, 1].min(), target[:, 1].min())
+        y_max = max(position[:, 1].max(), target[:, 1].max())
         add_buffer_limits(ax_traj, x_min, x_max, y_min, y_max, z_min, z_max)
-    
+
     labelpad = 0
     if remove_ticks:
         ax_traj.set_xticklabels([])
@@ -829,48 +1155,159 @@ def animate_trajectory_3d(position, target, cmap='rainbow', fps: int = 10,
         labelpad = -10
 
     if remove_labels:
-        ax_traj.set_xlabel('')
-        ax_traj.set_ylabel('')
-        ax_traj.set_zlabel('')
+        ax_traj.set_xlabel("")
+        ax_traj.set_ylabel("")
+        ax_traj.set_zlabel("")
     else:
         ax_traj.set_xlabel("X", labelpad=labelpad)
         ax_traj.set_ylabel("Y", labelpad=labelpad)
         ax_traj.set_zlabel("Z", labelpad=labelpad)
-    
+
     if show_colorbar:
         sm = cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
         sm.set_array([])
-        cb = plt.colorbar(sm, ax=ax_traj, ticks=[0, 1], pad=0.1, label="Normalized Time")
-        cb.ax.set_yticklabels(['Start', 'End'])
-    
-    ax_traj.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=2)
-    
+        cb = plt.colorbar(
+            sm, ax=ax_traj, ticks=[0, 1], pad=0.1, label="Normalized Time"
+        )
+        cb.ax.set_yticklabels(["Start", "End"])
+
+    ax_traj.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.2), ncol=2)
+
     # --- Shadows ---
     if show_shadows:
+        shadow_alpha = 0.1
         # Obtain projection coordinates.
         x_low = ax_traj.get_xlim()[0]
         y_high = ax_traj.get_ylim()[1]  # For XZ-plane, use maximum y.
         z_low = ax_traj.get_zlim()[0]
         # Static shadows for base and start markers.
         if base_marker:
-            ax_traj.scatter(0, 0, z_low, color='black', s=50, marker='P', alpha=0.2, depthshade=False)
-            ax_traj.scatter(0, y_high, 0, color='black', s=50, marker='P', alpha=0.2, depthshade=False)
-            ax_traj.scatter(x_low, 0, 0, color='black', s=50, marker='P', alpha=0.2, depthshade=False)
+            ax_traj.scatter(
+                0,
+                0,
+                z_low,
+                color="black",
+                s=50,
+                marker="P",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                0,
+                y_high,
+                0,
+                color="black",
+                s=50,
+                marker="P",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                x_low,
+                0,
+                0,
+                color="black",
+                s=50,
+                marker="P",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
         if position_marker:
-            ax_traj.scatter(position[0,0], position[0,1], z_low, color='black', s=50, marker='o', alpha=0.2, depthshade=False)
-            ax_traj.scatter(position[0,0], y_high, position[0,2], color='black', s=50, marker='o', alpha=0.2, depthshade=False)
-            ax_traj.scatter(x_low, position[0,1], position[0,2], color='black', s=50, marker='o', alpha=0.2, depthshade=False)
+            ax_traj.scatter(
+                position[0, 0],
+                position[0, 1],
+                z_low,
+                color="black",
+                s=50,
+                marker="o",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                position[0, 0],
+                y_high,
+                position[0, 2],
+                color="black",
+                s=50,
+                marker="o",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            ax_traj.scatter(
+                x_low,
+                position[0, 1],
+                position[0, 2],
+                color="black",
+                s=50,
+                marker="o",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
         # Create dynamic shadow scatter objects for dynamic markers.
         if target_marker:
-            shadow_xy_target = ax_traj.scatter(target[0,0], target[0,1], z_low, color='black', s=50, marker='*', alpha=0.2, depthshade=False)
-            shadow_xz_target = ax_traj.scatter(target[0,0], y_high, target[0,2], color='black', s=50, marker='*', alpha=0.2, depthshade=False)
-            shadow_yz_target = ax_traj.scatter(x_low, target[0,1], target[0,2], color='black', s=50, marker='*', alpha=0.2, depthshade=False)
+            shadow_xy_target = ax_traj.scatter(
+                target[0, 0],
+                target[0, 1],
+                z_low,
+                color="black",
+                s=100,
+                marker="*",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            shadow_xz_target = ax_traj.scatter(
+                target[0, 0],
+                y_high,
+                target[0, 2],
+                color="black",
+                s=100,
+                marker="*",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            shadow_yz_target = ax_traj.scatter(
+                x_low,
+                target[0, 1],
+                target[0, 2],
+                color="black",
+                s=100,
+                marker="*",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
         else:
             shadow_xy_target = shadow_xz_target = shadow_yz_target = None
         if position_marker:
-            shadow_xy_final = ax_traj.scatter(position[0,0], position[0,1], z_low, color='black', s=50, marker='X', alpha=0.2, depthshade=False)
-            shadow_xz_final = ax_traj.scatter(position[0,0], y_high, position[0,2], color='black', s=50, marker='X', alpha=0.2, depthshade=False)
-            shadow_yz_final = ax_traj.scatter(x_low, position[0,1], position[0,2], color='black', s=50, marker='X', alpha=0.2, depthshade=False)
+            shadow_xy_final = ax_traj.scatter(
+                position[0, 0],
+                position[0, 1],
+                z_low,
+                color="black",
+                s=50,
+                marker="X",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            shadow_xz_final = ax_traj.scatter(
+                position[0, 0],
+                y_high,
+                position[0, 2],
+                color="black",
+                s=50,
+                marker="X",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
+            shadow_yz_final = ax_traj.scatter(
+                x_low,
+                position[0, 1],
+                position[0, 2],
+                color="black",
+                s=50,
+                marker="X",
+                alpha=shadow_alpha,
+                depthshade=False,
+            )
         else:
             shadow_xy_final = shadow_xz_final = shadow_yz_final = None
     else:
@@ -879,22 +1316,24 @@ def animate_trajectory_3d(position, target, cmap='rainbow', fps: int = 10,
 
     # --- Bottom subplot: Distance over time ---
     ax_dist.set_xticks([t[0], t[-1]])
-    ax_dist.set_xticklabels(['Start', 'End'])
+    ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
-    ax_dist.spines['top'].set_visible(False)
-    ax_dist.spines['right'].set_visible(False)
-    
-    fig.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.1, hspace=0.2)
-    
+    ax_dist.spines["top"].set_visible(False)
+    ax_dist.spines["right"].set_visible(False)
+
+    fig.subplots_adjust(
+        left=0.1, right=0.9, top=0.95, bottom=0.1, hspace=0.1, wspace=0.1
+    )
+
     # --- Build frame indices ---
     frames_arr = np.arange(0, T, skip)
     if frames_arr[-1] != T - 1:
         frames_arr = np.append(frames_arr, T - 1)
-    
+
     def update(frame):
         if frame < 1:
             pos_collection.set_segments([])
@@ -907,23 +1346,55 @@ def animate_trajectory_3d(position, target, cmap='rainbow', fps: int = 10,
             tar_collection.set_array(full_tar_colors[:frame])
             dist_collection.set_segments(full_dist_segments[:frame])
             dist_collection.set_array(full_dist_colors[:frame])
-            
+
             # Update dynamic markers.
             if target_marker and target_sc is not None:
-                target_sc._offsets3d = ([target[frame,0]], [target[frame,1]], [target[frame,2]])
+                target_sc._offsets3d = (
+                    [target[frame, 0]],
+                    [target[frame, 1]],
+                    [target[frame, 2]],
+                )
             if position_marker and final_sc is not None:
-                final_sc._offsets3d = ([position[frame,0]], [position[frame,1]], [position[frame,2]])
-            
+                final_sc._offsets3d = (
+                    [position[frame, 0]],
+                    [position[frame, 1]],
+                    [position[frame, 2]],
+                )
+
             # Update dynamic shadows.
             if show_shadows and target_marker and shadow_xy_target is not None:
-                shadow_xy_target._offsets3d = ([target[frame,0]], [target[frame,1]], [z_low])
-                shadow_xz_target._offsets3d = ([target[frame,0]], [y_high], [target[frame,2]])
-                shadow_yz_target._offsets3d = ([x_low], [target[frame,1]], [target[frame,2]])
+                shadow_xy_target._offsets3d = (
+                    [target[frame, 0]],
+                    [target[frame, 1]],
+                    [z_low],
+                )
+                shadow_xz_target._offsets3d = (
+                    [target[frame, 0]],
+                    [y_high],
+                    [target[frame, 2]],
+                )
+                shadow_yz_target._offsets3d = (
+                    [x_low],
+                    [target[frame, 1]],
+                    [target[frame, 2]],
+                )
             if show_shadows and position_marker and shadow_xy_final is not None:
-                shadow_xy_final._offsets3d = ([position[frame,0]], [position[frame,1]], [z_low])
-                shadow_xz_final._offsets3d = ([position[frame,0]], [y_high], [position[frame,2]])
-                shadow_yz_final._offsets3d = ([x_low], [position[frame,1]], [position[frame,2]])
-                
+                shadow_xy_final._offsets3d = (
+                    [position[frame, 0]],
+                    [position[frame, 1]],
+                    [z_low],
+                )
+                shadow_xz_final._offsets3d = (
+                    [position[frame, 0]],
+                    [y_high],
+                    [position[frame, 2]],
+                )
+                shadow_yz_final._offsets3d = (
+                    [x_low],
+                    [position[frame, 1]],
+                    [position[frame, 2]],
+                )
+
         artists = [pos_collection, tar_collection, dist_collection]
         if target_marker:
             artists.append(target_sc)
@@ -934,13 +1405,15 @@ def animate_trajectory_3d(position, target, cmap='rainbow', fps: int = 10,
         if show_shadows and position_marker:
             artists.extend([shadow_xy_final, shadow_xz_final, shadow_yz_final])
         return artists
-    
-    anim = FuncAnimation(fig, update, frames=frames_arr, interval=1000/fps, blit=False, repeat=False)
+
+    anim = FuncAnimation(
+        fig, update, frames=frames_arr, interval=1000 / fps, blit=False, repeat=False
+    )
     return anim
 
 
 def animate_trajectory(
-    position, target, cmap="rainbow", fps=10, skip=1, figsize=(7, 6)
+    position, target, cmap="rainbow", fps=10, skip=1, figsize=(4, 5)
 ):
     """
     Wrapper that selects the 2D or 3D animation based on the input array dimensions.
@@ -973,10 +1446,12 @@ class TrajectoryPlotter:
         plot: Union[bool, int, List[int]] = True,
         animate: Union[bool, int, List[int]] = True,
         cmap: str = "rainbow",
-        figsize: tuple = (4, 6),
+        figsize: tuple = (3, 4.5),
         skip: int = 1,
+        max_trajectories: int = 8,
     ):
         self.trajectories = []
+        self.max_trajectories = max_trajectories
 
         if not isinstance(plot, (bool, list)):
             assert isinstance(
@@ -1026,6 +1501,8 @@ class TrajectoryPlotter:
             episodes = [episodes]
         for episode in episodes:
             self.extract(episode)
+            if len(self.trajectories) >= self.max_trajectories:
+                break
         print(f"Extracted total number of trajectories: {len(self.trajectories)}")
         if self.plot:
             print(f"Plotting trajectories... {self.plot}")
@@ -1038,7 +1515,9 @@ class TrajectoryPlotter:
         hand_positions = []
         target_positions = []
         for transition in episode:
-            hand_positions.append(transition.state[self.hand_idx].detach().cpu().numpy())
+            hand_positions.append(
+                transition.state[self.hand_idx].detach().cpu().numpy()
+            )
             target_positions.append(transition.target.detach().cpu().numpy())
         hand_positions = np.stack(hand_positions, axis=0)
         target_positions = np.stack(target_positions, axis=0)

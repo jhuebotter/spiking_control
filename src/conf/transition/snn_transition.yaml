@@ -7,7 +7,7 @@ model:
     # num_layers: 1
     readout:
       kwargs:
-        weight_scale: 0.001
+        weight_scale: 0.005
         output_scale: 1.0
         learn_weight_scale: true
         learn_output_scale: false
@@ -21,7 +21,7 @@ model:
 optimizer:
   type: ${optimizer.type}
   params:
-    lr: ${optimizer.params.lr}
+    lr: 0.001 #${optimizer.params.lr}
 
 learning:
   params:
