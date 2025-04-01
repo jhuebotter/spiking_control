@@ -536,7 +536,7 @@ class PredictiveControlAgent(BaseAgent):
         if env is None:
             env = self.env if self.eval_env is None else self.eval_env
 
-        set_test_mode_fn = getattr(env, "set_test_mode", None)
+        set_test_mode_fn = getattr(env.unwrapped, "set_test_mode", None)
         if callable(set_test_mode_fn):
             print("setting test mode to True")
             set_test_mode_fn(True)
