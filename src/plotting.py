@@ -15,6 +15,7 @@ from .utils import FrameStack
 from .eval_helpers import make_predictions
 from .memory import Episode
 from celluloid import Camera
+import seaborn as sns
 
 
 def render_video(
@@ -365,7 +366,7 @@ def add_buffer_limits(
 def plot_trajectory_2d(
     position,
     target,
-    cmap="rainbow",
+    cmap="rainbow_r",
     figsize=(3, 4.5),
     remove_ticks=True,
     remove_labels=True,
@@ -374,6 +375,8 @@ def plot_trajectory_2d(
     position_marker=True,
     target_marker=True,
     base_marker=True,
+    linewidth=2,
+    on_target_line: Optional[float] = 0.05,
 ):
     """
     Creates a 2D plot of the trajectory (position) and target trajectory in the top subplot,
@@ -390,54 +393,88 @@ def plot_trajectory_2d(
     T = position.shape[0]
     t = np.linspace(0, 1, T)
 
+    # get the colormap
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
     # --- Top subplot: Trajectory plot ---
     plt.sca(ax_traj)  # Set current axis to ax_traj.
-    lc = colorline2d(position[:, 0], position[:, 1], z=t, cmap=cmap)
-    colorline2d(target[:, 0], target[:, 1], z=t, cmap=cmap)
+    lc = colorline2d(
+        position[:, 0], position[:, 1], z=t, cmap=cmap, linewidth=linewidth
+    )
+    colorline2d(target[:, 0], target[:, 1], z=t, cmap=cmap, linewidth=linewidth)
 
     # Draw original markers with requested colors, symbols, and outlines.
     if base_marker:
         ax_traj.scatter(
             0,
             0,
-            color="green",
+            color="yellow",
             s=50,
             marker="P",
             label="Base",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
     if target_marker:
-        ax_traj.scatter(
-            target[-1, 0],
-            target[-1, 1],
-            color="red",
-            s=100,
-            marker="*",
-            label="Target",
-            edgecolor="black",
-            linewidth=0.5,
-        )
+        if on_target_line is not None:
+            circle = plt.Circle(
+                (target[-1, 0], target[-1, 1]),
+                on_target_line,
+                facecolor="red",
+                fill=True,
+                linestyle="-",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2
+            )
+            ax_traj.add_artist(circle)
+            ax_traj.scatter(
+                [],
+                [],
+                color="red",
+                s=50,
+                marker="o",
+                label="Target",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2
+            )
+        else:
+            ax_traj.scatter(
+                target[-1, 0],
+                target[-1, 1],
+                color="red",
+                s=50,
+                marker="o",
+                label="Target",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2
+            )
     if position_marker:
         ax_traj.scatter(
             position[0, 0],
             position[0, 1],
-            color="yellow",
-            s=50,
-            marker="o",
+            color=cmap(0.0),
+            s=100,
+            marker="*",
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
         ax_traj.scatter(
             position[-1, 0],
             position[-1, 1],
-            color="blue",
+            color=cmap(1.0),
             s=50,
             marker="X",
             label="Final Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
 
     # Set axis limits for 2D plot.
@@ -474,13 +511,17 @@ def plot_trajectory_2d(
     # --- New: Bottom subplot: Distance over time ---
     distance = compute_distance(position, target)
     plt.sca(ax_dist)  # Set current axis to ax_dist.
-    colorline2d(t, distance, z=t, cmap=cmap)
+    if on_target_line is not None:
+        # fill the area between 0 and the on_target_line
+        ax_dist.fill_between(t, 0, on_target_line, color="red", alpha=0.2)
+    colorline2d(t, distance, z=t, cmap=cmap, linewidth=linewidth)
 
     ax_dist.set_xticks([t[0], t[-1]])
     ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
+    ax_dist.set_xlim(0, 1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
     ax_dist.spines["top"].set_visible(False)
@@ -493,7 +534,7 @@ def plot_trajectory_2d(
 def plot_trajectory_3d(
     position,
     target,
-    cmap="rainbow",
+    cmap="rainbow_r",
     figsize=(3, 4.5),
     remove_ticks=True,
     remove_labels=True,
@@ -503,6 +544,8 @@ def plot_trajectory_3d(
     position_marker=True,
     target_marker=True,
     base_marker=True,
+    linewidth=2,
+    on_target_line: Optional[float] = 0.123,
 ):
     """
     Creates a 3D plot of the trajectory (position) and target trajectory in the top subplot,
@@ -510,9 +553,9 @@ def plot_trajectory_3d(
     Both lines are drawn as multicolored lines where the color indicates time.
     Axis limits are set to the range of the data plus a 10% buffer.
     Markers are drawn with the following scheme:
-      - Target: red star ('*')
+      - Target: red circle ('o')
       - Base: green marker ('P')
-      - Start Position: yellow circle ('o')
+      - Start Position: yellow star ('*')
       - Final Position: red thick x ('X')
     All markers have a thin black outline.
     Additionally, each marker is projected onto the three coordinate planes as a shadow,
@@ -529,6 +572,10 @@ def plot_trajectory_3d(
     ax_traj = fig.add_subplot(gs[0], projection="3d")
     ax_dist = fig.add_subplot(gs[1])
 
+    # get the colormap
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
     # --- Top subplot: 3D Trajectory ---
     plt.sca(ax_traj)
     pos_collection = colorline3d(
@@ -537,10 +584,16 @@ def plot_trajectory_3d(
         position[:, 2],
         cmap=cmap,
         norm=plt.Normalize(0, 1),
+        linewidth=linewidth,
     )
     # plt.sca(ax_traj)
     target_collection = colorline3d(
-        target[:, 0], target[:, 1], target[:, 2], cmap=cmap, norm=plt.Normalize(0, 1)
+        target[:, 0],
+        target[:, 1],
+        target[:, 2],
+        cmap=cmap,
+        norm=plt.Normalize(0, 1),
+        linewidth=linewidth,
     )
 
     # Draw original markers with requested colors, symbols, and outlines.
@@ -549,51 +602,85 @@ def plot_trajectory_3d(
             0,
             0,
             0,
-            color="green",
+            color="yellow",
             s=50,
             marker="P",
             label="Base",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
     if target_marker:
-        ax_traj.scatter(
-            target[-1, 0],
-            target[-1, 1],
-            target[-1, 2],
-            color="red",
-            s=100,
-            marker="*",
-            label="Target",
-            edgecolor="black",
-            linewidth=0.5,
-        )
+        if on_target_line is not None:
+            # Define the sphere parameters
+            radius = on_target_line
+            center = target[-1, :]
+
+            # Create spherical coordinates
+            u = np.linspace(0, 2 * np.pi, 50)
+            v = np.linspace(0, np.pi, 50)
+            x = center[0] + radius * np.outer(np.cos(u), np.sin(v))
+            y = center[1] + radius * np.outer(np.sin(u), np.sin(v))
+            z = center[2] + radius * np.outer(np.ones_like(u), np.cos(v))
+
+            # Plot the surface
+            ax_traj.plot_surface(
+                x, y, z, color="red", alpha=0.4, linewidth=0, shade=False
+            )
+            ax_traj.scatter(
+                [],
+                [],
+                [],
+                color="red",
+                s=50,
+                marker="o",
+                label="Target",
+                edgecolor="black",
+                linewidth=0.5,
+                alpha=0.7,
+                zorder=2
+            )
+        else:
+            ax_traj.scatter(
+                target[-1, 0],
+                target[-1, 1],
+                target[-1, 2],
+                color="red",
+                s=50,
+                marker="o",
+                label="Target",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2
+            )
     if position_marker:
         ax_traj.scatter(
             position[0, 0],
             position[0, 1],
             position[0, 2],
-            color="yellow",
-            s=50,
-            marker="o",
+            color=cmap(0.0),
+            s=100,
+            marker="*",
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
         ax_traj.scatter(
             position[-1, 0],
             position[-1, 1],
             position[-1, 2],
-            color="blue",
+            color=cmap(1.0),
             s=50,
             marker="X",
             label="Final Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
 
     # Set axis limits.
-    z_min = min(min(position[:, 2].min(), target[:, 2].min()), 0.0)
+    z_min = min(position[:, 2].min(), target[:, 2].min())
     z_max = max(position[:, 2].max(), target[:, 2].max())
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
@@ -620,6 +707,14 @@ def plot_trajectory_3d(
         ax_traj.set_xlabel("X", labelpad=labelpad)
         ax_traj.set_ylabel("Y", labelpad=labelpad)
         ax_traj.set_zlabel("Z", labelpad=labelpad)
+
+    # Set equal aspect ratio for all axes
+    ax_traj.set_box_aspect([1, 1, 1])
+
+    # Set the color of the axes panes to white.
+    ax_traj.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # RGBA for white
+    ax_traj.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax_traj.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
     if show_colorbar:
         cb = plt.colorbar(
@@ -671,46 +766,79 @@ def plot_trajectory_3d(
                 depthshade=False,
             )
         if target_marker:
-            # Target marker shadows: use marker '*'
-            ax_traj.scatter(
-                target[-1, 0],
-                target[-1, 1],
-                z_low,
-                color="black",
-                s=100,
-                marker="*",
-                alpha=shadow_alpha,
-                depthshade=False,
-            )
-            ax_traj.scatter(
-                target[-1, 0],
-                y_high,
-                target[-1, 2],
-                color="black",
-                s=100,
-                marker="*",
-                alpha=shadow_alpha,
-                depthshade=False,
-            )
-            ax_traj.scatter(
-                x_low,
-                target[-1, 1],
-                target[-1, 2],
-                color="black",
-                s=100,
-                marker="*",
-                alpha=shadow_alpha,
-                depthshade=False,
-            )
+            if on_target_line is not None:
+                # Draw the sphere shadow
+                x_shadow = np.full_like(x, x_low)
+                y_shadow = np.full_like(y, y_high)
+                z_shadow = np.full_like(z, z_low)
+                ax_traj.plot_surface(
+                    x,
+                    y,
+                    z_shadow,
+                    color="black",
+                    alpha=shadow_alpha,
+                    linewidth=0,
+                    shade=False,
+                )
+                ax_traj.plot_surface(
+                    x,
+                    y_shadow,
+                    z,
+                    color="black",
+                    alpha=shadow_alpha,
+                    linewidth=0,
+                    shade=False,
+                )
+                ax_traj.plot_surface(
+                    x_shadow,
+                    y,
+                    z,
+                    color="black",
+                    alpha=shadow_alpha,
+                    linewidth=0,
+                    shade=False,
+                )
+            else:
+                # Target marker shadows: use marker 'o'
+                ax_traj.scatter(
+                    target[-1, 0],
+                    target[-1, 1],
+                    z_low,
+                    color="black",
+                    s=50,
+                    marker="o",
+                    alpha=shadow_alpha,
+                    depthshade=False,
+                )
+                ax_traj.scatter(
+                    target[-1, 0],
+                    y_high,
+                    target[-1, 2],
+                    color="black",
+                    s=50,
+                    marker="o",
+                    alpha=shadow_alpha,
+                    depthshade=False,
+                )
+                ax_traj.scatter(
+                    x_low,
+                    target[-1, 1],
+                    target[-1, 2],
+                    color="black",
+                    s=50,
+                    marker="o",
+                    alpha=shadow_alpha,
+                    depthshade=False,
+                )
         if position_marker:
-            # Start marker shadows: use marker 'o'
+            # Start marker shadows: use marker '*'
             ax_traj.scatter(
                 position[0, 0],
                 position[0, 1],
                 z_low,
                 color="black",
-                s=50,
-                marker="o",
+                s=100,
+                marker="*",
                 alpha=shadow_alpha,
                 depthshade=False,
             )
@@ -719,8 +847,8 @@ def plot_trajectory_3d(
                 y_high,
                 position[0, 2],
                 color="black",
-                s=50,
-                marker="o",
+                s=100,
+                marker="*",
                 alpha=shadow_alpha,
                 depthshade=False,
             )
@@ -729,8 +857,8 @@ def plot_trajectory_3d(
                 position[0, 1],
                 position[0, 2],
                 color="black",
-                s=50,
-                marker="o",
+                s=100,
+                marker="*",
                 alpha=shadow_alpha,
                 depthshade=False,
             )
@@ -769,12 +897,16 @@ def plot_trajectory_3d(
     # --- Bottom subplot: Distance over time ---
     distance = compute_distance(position, target)
     plt.sca(ax_dist)
-    colorline2d(t, distance, z=t, cmap=cmap)
+    # fill between 0 and on_target_line
+    if on_target_line is not None:
+        ax_dist.fill_between(t, 0, on_target_line, color="red", alpha=0.2)
+    colorline2d(t, distance, z=t, cmap=cmap, linewidth=linewidth)
     ax_dist.set_xticks([t[0], t[-1]])
     ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
+    ax_dist.set_xlim(0, 1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
     ax_dist.spines["top"].set_visible(False)
@@ -822,7 +954,7 @@ def plot_trajectory(position, target, cmap="rainbow", figsize=(7, 6)):
 def animate_trajectory_2d(
     position,
     target,
-    cmap="rainbow",
+    cmap="rainbow_r",
     fps: int = 10,
     skip: int = 1,
     figsize=(3, 4.5),
@@ -833,7 +965,9 @@ def animate_trajectory_2d(
     position_marker: bool = True,
     target_marker: bool = True,
     base_marker: bool = True,
-):
+    linewidth: int = 2,
+    on_target_line: Optional[float] = 0.05,
+) -> FuncAnimation:
     """
     Animates a 2D trajectory and target along with a lower subplot showing the Euclidean
     distance between them over time. At each frame the markers (target and final position)
@@ -848,6 +982,10 @@ def animate_trajectory_2d(
     T = position.shape[0]
     t = np.linspace(0, 1, T)
 
+    # Get the colormap.
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
     # Precompute full segments and fixed color arrays for the trajectory.
     full_pos_segments = make_segments(position[:, 0], position[:, 1])
     full_tar_segments = make_segments(target[:, 0], target[:, 1])
@@ -861,17 +999,17 @@ def animate_trajectory_2d(
 
     # Create empty LineCollections for the trajectory (top subplot)...
     pos_collection = mcoll.LineCollection(
-        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=linewidth, alpha=1.0
     )
     tar_collection = mcoll.LineCollection(
-        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=linewidth, alpha=1.0
     )
     ax_traj.add_collection(pos_collection)
     ax_traj.add_collection(tar_collection)
 
     # ...and for the distance plot (bottom subplot).
     dist_collection = mcoll.LineCollection(
-        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=linewidth, alpha=1.0
     )
     ax_dist.add_collection(dist_collection)
 
@@ -881,44 +1019,48 @@ def animate_trajectory_2d(
         ax_traj.scatter(
             0,
             0,
-            color="green",
+            color="yellow",
             s=50,
             marker="P",
             label="Base",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
     if target_marker:
         scatter_target = ax_traj.scatter(
-            target[-1, 0],
-            target[-1, 1],
+            target[0, 0],
+            target[0, 1],
             color="red",
-            s=100,
-            marker="*",
+            s=50,
+            marker="o",
             label="Target",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
     if position_marker:
         ax_traj.scatter(
             position[0, 0],
             position[0, 1],
-            color="yellow",
-            s=50,
-            marker="o",
+            color=cmap(0.0),
+            s=100,
+            marker="*",
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
         scatter_final = ax_traj.scatter(
-            position[-1, 0],
-            position[-1, 1],
-            color="blue",
+            position[0, 0],
+            position[0, 1],
+            color=cmap(1.0),
             s=50,
             marker="X",
             label="Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
 
     # Set axis limits for the trajectory subplot.
@@ -956,11 +1098,14 @@ def animate_trajectory_2d(
     )
 
     # Set axis limits and labels for the distance subplot.
+    if on_target_line is not None:
+        ax_dist.fill_between(t, 0, on_target_line, color="red", alpha=0.2)
     ax_dist.set_xticks([t[0], t[-1]])
     ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
+    ax_dist.set_xlim(0, 1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
     ax_dist.spines["top"].set_visible(False)
@@ -1016,7 +1161,7 @@ def animate_trajectory_2d(
 def animate_trajectory_3d(
     position,
     target,
-    cmap="rainbow",
+    cmap="rainbow_r",
     fps: int = 10,
     skip: int = 1,
     figsize=(3, 4.5),
@@ -1028,7 +1173,9 @@ def animate_trajectory_3d(
     base_marker=True,
     target_marker=True,
     position_marker=True,
-):
+    linewidth=2,
+    on_target_line: Optional[float] = 0.123,
+) -> FuncAnimation:
     """
     Animates a 3D trajectory and target along with a lower subplot showing the Euclidean
     distance between them over time. Supports the same marker scheme as the static plot:
@@ -1052,6 +1199,10 @@ def animate_trajectory_3d(
     ax_traj = fig.add_subplot(gs[0], projection="3d")
     ax_dist = fig.add_subplot(gs[1])
 
+    # Get the colormap.
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+
     # Precompute full segments and fixed color arrays for the 3D trajectory.
     full_pos_segments = make_segments3d(position[:, 0], position[:, 1], position[:, 2])
     full_tar_segments = make_segments3d(target[:, 0], target[:, 1], target[:, 2])
@@ -1065,17 +1216,17 @@ def animate_trajectory_3d(
 
     # Create empty LineCollections for the 3D trajectory.
     pos_collection = Line3DCollection(
-        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=linewidth, alpha=1.0
     )
     tar_collection = Line3DCollection(
-        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=linewidth, alpha=1.0
     )
     ax_traj.add_collection(pos_collection)
     ax_traj.add_collection(tar_collection)
 
     # Create empty LineCollection for the distance plot.
     dist_collection = LineCollection(
-        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=3, alpha=1.0
+        [], cmap=cmap, norm=plt.Normalize(0, 1), linewidth=linewidth, alpha=1.0
     )
     ax_dist.add_collection(dist_collection)
 
@@ -1086,25 +1237,56 @@ def animate_trajectory_3d(
             0,
             0,
             0,
-            color="green",
+            color="yellow",
             s=50,
             marker="P",
             label="Base",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
     if target_marker:
-        target_sc = ax_traj.scatter(
-            target[0, 0],
-            target[0, 1],
-            target[0, 2],
-            color="red",
-            s=100,
-            marker="*",
-            label="Target",
-            edgecolor="black",
-            linewidth=0.5,
-        )
+        if on_target_line is not None:
+            # Define the sphere parameters
+            radius = on_target_line
+            center = target[-1, :]
+
+            # Create spherical coordinates
+            u = np.linspace(0, 2 * np.pi, 50)
+            v = np.linspace(0, np.pi, 50)
+            x = center[0] + radius * np.outer(np.cos(u), np.sin(v))
+            y = center[1] + radius * np.outer(np.sin(u), np.sin(v))
+            z = center[2] + radius * np.outer(np.ones_like(u), np.cos(v))
+
+            # Plot the surface
+            target_sc = ax_traj.plot_surface(
+                x, y, z, color="red", alpha=0.4, linewidth=0, shade=False
+            )
+            ax_traj.scatter(
+                [],
+                [],
+                [],
+                color="red",
+                s=50,
+                marker="o",
+                label="Target",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2
+            )
+        else:
+            target_sc = ax_traj.scatter(
+                target[0, 0],
+                target[0, 1],
+                target[0, 2],
+                color="red",
+                s=50,
+                marker="o",
+                label="Target",
+                edgecolor="black",
+                linewidth=0.5,
+                zorder=2
+            )
     else:
         target_sc = None
     if position_marker:
@@ -1112,29 +1294,31 @@ def animate_trajectory_3d(
             position[0, 0],
             position[0, 1],
             position[0, 2],
-            color="yellow",
-            s=50,
-            marker="o",
+            color=cmap(0.0),
+            s=100,
+            marker="*",
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
         final_sc = ax_traj.scatter(
             position[0, 0],
             position[0, 1],
             position[0, 2],
-            color="blue",
+            color=cmap(1.0),
             s=50,
             marker="X",
             label="Position",
             edgecolor="black",
             linewidth=0.5,
+            zorder=2
         )
     else:
         final_sc = None
 
     # --- Axis Limits ---
-    z_min = min(min(position[:, 2].min(), target[:, 2].min()), 0.0)
+    z_min = min(position[:, 2].min(), target[:, 2].min())
     z_max = max(position[:, 2].max(), target[:, 2].max())
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
@@ -1162,6 +1346,14 @@ def animate_trajectory_3d(
         ax_traj.set_xlabel("X", labelpad=labelpad)
         ax_traj.set_ylabel("Y", labelpad=labelpad)
         ax_traj.set_zlabel("Z", labelpad=labelpad)
+
+    # Set equal aspect ratio for all axes
+    ax_traj.set_box_aspect([1, 1, 1])
+
+    # Set the color of the axes panes to white.
+    ax_traj.xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))  # RGBA for white
+    ax_traj.yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+    ax_traj.zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
 
     if show_colorbar:
         sm = cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(0, 1))
@@ -1218,8 +1410,8 @@ def animate_trajectory_3d(
                 position[0, 1],
                 z_low,
                 color="black",
-                s=50,
-                marker="o",
+                s=100,
+                marker="*",
                 alpha=shadow_alpha,
                 depthshade=False,
             )
@@ -1228,8 +1420,8 @@ def animate_trajectory_3d(
                 y_high,
                 position[0, 2],
                 color="black",
-                s=50,
-                marker="o",
+                s=100,
+                marker="*",
                 alpha=shadow_alpha,
                 depthshade=False,
             )
@@ -1238,43 +1430,76 @@ def animate_trajectory_3d(
                 position[0, 1],
                 position[0, 2],
                 color="black",
-                s=50,
-                marker="o",
+                s=100,
+                marker="*",
                 alpha=shadow_alpha,
                 depthshade=False,
             )
         # Create dynamic shadow scatter objects for dynamic markers.
         if target_marker:
-            shadow_xy_target = ax_traj.scatter(
-                target[0, 0],
-                target[0, 1],
-                z_low,
-                color="black",
-                s=100,
-                marker="*",
-                alpha=shadow_alpha,
-                depthshade=False,
-            )
-            shadow_xz_target = ax_traj.scatter(
-                target[0, 0],
-                y_high,
-                target[0, 2],
-                color="black",
-                s=100,
-                marker="*",
-                alpha=shadow_alpha,
-                depthshade=False,
-            )
-            shadow_yz_target = ax_traj.scatter(
-                x_low,
-                target[0, 1],
-                target[0, 2],
-                color="black",
-                s=100,
-                marker="*",
-                alpha=shadow_alpha,
-                depthshade=False,
-            )
+            if on_target_line is not None:
+                # Draw the sphere shadow
+                x_shadow = np.full_like(x, x_low)
+                y_shadow = np.full_like(y, y_high)
+                z_shadow = np.full_like(z, z_low)
+                shadow_xy_target = ax_traj.plot_surface(
+                    x,
+                    y,
+                    z_shadow,
+                    color="black",
+                    alpha=shadow_alpha,
+                    linewidth=0,
+                    shade=False,
+                )
+                shadow_xz_target = ax_traj.plot_surface(
+                    x,
+                    y_shadow,
+                    z,
+                    color="black",
+                    alpha=shadow_alpha,
+                    linewidth=0,
+                    shade=False,
+                )
+                shadow_yz_target = ax_traj.plot_surface(
+                    x_shadow,
+                    y,
+                    z,
+                    color="black",
+                    alpha=shadow_alpha,
+                    linewidth=0,
+                    shade=False,
+                )
+            else:
+                shadow_xy_target = ax_traj.scatter(
+                    target[0, 0],
+                    target[0, 1],
+                    z_low,
+                    color="black",
+                    s=50,
+                    marker="o",
+                    alpha=shadow_alpha,
+                    depthshade=False,
+                )
+                shadow_xz_target = ax_traj.scatter(
+                    target[0, 0],
+                    y_high,
+                    target[0, 2],
+                    color="black",
+                    s=50,
+                    marker="o",
+                    alpha=shadow_alpha,
+                    depthshade=False,
+                )
+                shadow_yz_target = ax_traj.scatter(
+                    x_low,
+                    target[0, 1],
+                    target[0, 2],
+                    color="black",
+                    s=50,
+                    marker="o",
+                    alpha=shadow_alpha,
+                    depthshade=False,
+                )
         else:
             shadow_xy_target = shadow_xz_target = shadow_yz_target = None
         if position_marker:
@@ -1315,11 +1540,15 @@ def animate_trajectory_3d(
         shadow_xy_final = shadow_xz_final = shadow_yz_final = None
 
     # --- Bottom subplot: Distance over time ---
+    # fill between 0 and on_target_line
+    if on_target_line is not None:
+        ax_dist.fill_between(t, 0, on_target_line, color="red", alpha=0.2)
     ax_dist.set_xticks([t[0], t[-1]])
     ax_dist.set_xticklabels(["Start", "End"])
     if remove_ticks:
         ax_dist.set_yticks([])
     ax_dist.set_ylim(0, distance.max() + 0.1)
+    ax_dist.set_xlim(0, 1)
     ax_dist.set_xlabel("Time")
     ax_dist.set_ylabel("Distance")
     ax_dist.spines["top"].set_visible(False)
@@ -1445,10 +1674,10 @@ class TrajectoryPlotter:
         env,
         plot: Union[bool, int, List[int]] = True,
         animate: Union[bool, int, List[int]] = True,
-        cmap: str = "rainbow",
+        cmap: str = sns.color_palette("blend:#87cc6e,#25499c", as_cmap=True),
         figsize: tuple = (3, 4.5),
         skip: int = 1,
-        max_trajectories: int = 8,
+        max_trajectories: int = 4,
     ):
         self.trajectories = []
         self.max_trajectories = max_trajectories
