@@ -89,10 +89,10 @@ run:
   action_smoothness_reg_weight_start: 0.0
   action_smoothness_reg_weight_end: 0.0
   action_smoothness_reg_weight_warmup_steps: ${run.action_reg_weight_warmup_steps}
-  iterations: 150
+  iterations: 100
 
 plotting:
-  render_every: 10
+  render_every: 25
   prediction_animation_unroll: 50
   prediction_animation_step: 5
 

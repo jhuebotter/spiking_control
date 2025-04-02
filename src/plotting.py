@@ -9,14 +9,13 @@ import matplotlib.pyplot as plt
 import matplotlib.collections as mcoll
 import matplotlib.cm as cm
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
-from matplotlib.collections import LineCollection  # 2D LC.
+from matplotlib.collections import LineCollection
+from matplotlib.colors import LinearSegmentedColormap
 from .extratypes import *
 from .utils import FrameStack
 from .eval_helpers import make_predictions
 from .memory import Episode
 from celluloid import Camera
-import seaborn as sns
-
 
 def render_video(
     framestacks: list[FrameStack],
@@ -409,7 +408,7 @@ def plot_trajectory_2d(
         ax_traj.scatter(
             0,
             0,
-            color="yellow",
+            color="black",
             s=50,
             marker="P",
             label="Base",
@@ -554,9 +553,9 @@ def plot_trajectory_3d(
     Axis limits are set to the range of the data plus a 10% buffer.
     Markers are drawn with the following scheme:
       - Target: red circle ('o')
-      - Base: green marker ('P')
-      - Start Position: yellow star ('*')
-      - Final Position: red thick x ('X')
+      - Base: black + marker ('P')
+      - Start Position: star ('*')
+      - Final Position: thick x ('X')
     All markers have a thin black outline.
     Additionally, each marker is projected onto the three coordinate planes as a shadow,
     drawn in black with alpha=shadow_alpha and no outline.
@@ -602,7 +601,7 @@ def plot_trajectory_3d(
             0,
             0,
             0,
-            color="yellow",
+            color="black",
             s=50,
             marker="P",
             label="Base",
@@ -1019,7 +1018,7 @@ def animate_trajectory_2d(
         ax_traj.scatter(
             0,
             0,
-            color="yellow",
+            color="black",
             s=50,
             marker="P",
             label="Base",
@@ -1179,10 +1178,10 @@ def animate_trajectory_3d(
     """
     Animates a 3D trajectory and target along with a lower subplot showing the Euclidean
     distance between them over time. Supports the same marker scheme as the static plot:
-      - Target: red star ('*')
-      - Base: green marker ('P')
-      - Start Position: yellow circle ('o')
-      - Position: blue thick x ('X')
+        - Target: red circle ('o')
+        - Base: black + marker ('P')
+        - Start Position: star ('*')
+        - Final Position: thick x ('X')
     All markers have a thin black outline (the final marker has a thicker outline).
     If show_shadows is True, each marker projects its shadow (in black, alpha=shadow_alpha, no outline)
     onto the XY-, XZ-, and YZ-planes.
@@ -1237,7 +1236,7 @@ def animate_trajectory_3d(
             0,
             0,
             0,
-            color="yellow",
+            color="black",
             s=50,
             marker="P",
             label="Base",
@@ -1674,7 +1673,7 @@ class TrajectoryPlotter:
         env,
         plot: Union[bool, int, List[int]] = True,
         animate: Union[bool, int, List[int]] = True,
-        cmap: str = sns.color_palette("blend:#87cc6e,#25499c", as_cmap=True),
+        cmap: Optional[str] = None,
         figsize: tuple = (3, 4.5),
         skip: int = 1,
         max_trajectories: int = 4,
@@ -1700,9 +1699,17 @@ class TrajectoryPlotter:
         ), "The animate attribute must be a boolean or a list of integers."
         self.plot = plot
         self.animate = animate
-        self.cmap = cmap
         self.figsize = figsize
         self.skip = skip
+
+        if cmap is None:
+            # Define the two colors (as hex or RGB)
+            colors = ["#87cc6e", "#25499c"]
+            # Create a custom linear colormap
+            cmap = LinearSegmentedColormap.from_list("custom_blend", colors)
+        if isinstance(cmap, str):
+            cmap = plt.get_cmap(cmap)
+        self.cmap = cmap
 
         # get some info from the environment where to find the hand position in the state observations
         loss_gain = env.unwrapped.call("get_loss_gain")[0]
