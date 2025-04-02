@@ -15,8 +15,8 @@ model:
   num_layers: 2
   time:
     dt: 0.002
-    tau_mem: 0.02
-    tau_syn: 0.01
+    tau_mem: 0.01
+    tau_syn: 0.002
   activation:
     type: sigmoidspike
     beta: 25
@@ -28,7 +28,7 @@ model:
     alpha: 0.8
     mu_u: 0.0
     sigma_u: 1.0
-    nu: 100
+    nu: 125
     bias_scale: 1.0
     bias_mean: 0.0
     scaling: 1
@@ -52,12 +52,12 @@ optimizer:
     lr: 0.002
 
 LowerBoundL2:
-  strength: 0.001
+  strength: 0.0
   threshold: -20
   basis: mem
   dims: null   # null means per neuron, 1 means avg per layer
 UpperBoundL2:
-  strength: 0.001
+  strength: 0.0
   threshold: 0.3
   basis: out
   dims: null
@@ -84,15 +84,15 @@ run:
   action_noise_std: 0.0
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0
-  action_reg_weight_end: 0.01
+  action_reg_weight_end: 0.0
   action_reg_weight_warmup_steps: 0
   action_smoothness_reg_weight_start: 0.0
-  action_smoothness_reg_weight_end: 0.001
-  action_smoothness_reg_weight_warmup_steps: 0
+  action_smoothness_reg_weight_end: 0.0
+  action_smoothness_reg_weight_warmup_steps: ${run.action_reg_weight_warmup_steps}
   iterations: 150
 
 plotting:
-  render_every: 25
+  render_every: 10
   prediction_animation_unroll: 50
   prediction_animation_step: 5
 

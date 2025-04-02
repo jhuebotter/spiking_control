@@ -145,7 +145,7 @@ def change_joint_properties(
 class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
     # environment variables
     episode_length_s = 3.0
-    target_reach_threshold = 0.1  # probably less than this
+    target_reach_threshold = 0.123  # probably less than this
     active_joints_idx = [0, 1, 2, 3, 4, 5]
     num_actions_: int = len(active_joints_idx)
     num_observations_ = 20
