@@ -1743,7 +1743,6 @@ class TrajectoryPlotter:
                 break
         print(f"Extracted total number of trajectories: {len(self.trajectories)}")
         if self.plot:
-            print(f"Plotting trajectories... {self.plot}")
             figures = self.plot_trajectories()
         if self.animate:
             animations = self.animate_trajectories()

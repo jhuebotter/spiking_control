@@ -35,8 +35,6 @@ def cleanup(dct: dict, level: int = 0):
         # delete all references to the dictionary and its contents
         del val
     dct.clear()
-    # delete the dictionary itself
-    del dct
     # close all figures and animations
     plt.close("all")
     # call the garbage collector
