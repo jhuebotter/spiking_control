@@ -1154,6 +1154,7 @@ def animate_trajectory_2d(
     anim = FuncAnimation(
         fig, update, frames=frames, interval=1000 / fps, blit=True, repeat=False
     )
+    plt.close()
     return anim
 
 
@@ -1637,6 +1638,7 @@ def animate_trajectory_3d(
     anim = FuncAnimation(
         fig, update, frames=frames_arr, interval=1000 / fps, blit=False, repeat=False
     )
+    plt.close()
     return anim
 
 
