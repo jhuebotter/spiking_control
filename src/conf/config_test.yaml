@@ -49,7 +49,7 @@ model:
 optimizer:
   type: adam
   params:
-    lr: 0.002
+    lr: 0.001
 
 LowerBoundL2:
   strength: 0.0
@@ -75,9 +75,9 @@ run:
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
   early_stop_mode: "max"
-  lr_decay: 0.97
+  lr_decay: 1.0
   lr_warmup_steps: 0
-  lr_end: 0.0005
+  lr_end: 0.0001
   teacher_forcing_p: 1.0
   teacher_forcing_decay: 1.0
   teacher_forcing_warmup_steps: 10
@@ -97,6 +97,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
+  batches_per_iteration: 25
   total_steps: ${mul:${task.steps_per_iteration}, ${run.iterations}}
 
 hydra:

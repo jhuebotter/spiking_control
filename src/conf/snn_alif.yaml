@@ -72,7 +72,7 @@ model:
 optimizer: ${optimizer}
 
 learning:
-  batches_per_iteration: 25
+  batches_per_iteration: ${learning.batches_per_iteration}
   params:
     relative_l2_weight: 1.0
     batch_size: 256
