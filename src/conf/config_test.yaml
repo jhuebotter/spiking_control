@@ -70,7 +70,7 @@ run:
   encoder1: identity
   encoder2: identity
   load_dir: null
-  prediction_unroll: 20
+  prediction_unroll: 50
   eval_first: true
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
@@ -91,6 +91,7 @@ run:
   action_smoothness_reg_weight_end: 0.0
   action_smoothness_reg_weight_warmup_steps: ${run.action_reg_weight_warmup_steps}
   iterations: 100
+  save_latest_model: false
 
 plotting:
   render_every: 25

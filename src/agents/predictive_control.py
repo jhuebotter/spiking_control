@@ -199,7 +199,8 @@ class PredictiveControlAgent(BaseAgent):
                 render=render,
                 return_results=[self.early_stop_metric],
             )
-            self.save_models()
+            if self.run_config.get("save_latest_model", False):
+                self.save_models()
             self.step_scheduler()
             self.iterations += 1
             if self.check_early_stop(test_results):
