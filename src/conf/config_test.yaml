@@ -78,9 +78,10 @@ run:
   lr_decay: 1.0
   lr_warmup_steps: 0
   lr_end: 0.0001
-  teacher_forcing_p: 1.0
-  teacher_forcing_decay: 1.0
-  teacher_forcing_warmup_steps: 10
+  teacher_forcing_start: 1.0
+  teacher_forcing_end: 0.0
+  teacher_forcing_warmup_steps: 0
+  teacher_forcing_decay_steps: 0
   action_noise_std: 0.0
   action_noise_decay: 1.0
   action_reg_weight_start: 0.0

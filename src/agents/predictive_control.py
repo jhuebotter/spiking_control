@@ -5,6 +5,7 @@ from ..utils import (
     make_optimizer,
     dict_mean,
     FrameStack,
+    LinearScheduler,
     ExponentialScheduler,
     StepScheduler,
     LRSchedulerWrapper
@@ -128,10 +129,11 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # make a teacher forcing scheduler
-        self.transition_model_tf_scheduler = ExponentialScheduler(
-            self.run_config.get("teacher_forcing_p", 1.0),
+        self.transition_model_tf_scheduler = LinearScheduler(
+            self.run_config.get("teacher_forcing_start", 1.0),
+            end=self.run_config.get("teacher_forcing_end", 1.0),
             warmup_steps=self.run_config.get("teacher_forcing_warmup_steps", 0),
-            gamma=self.run_config.get("teacher_forcing_decay", 1.0),
+            decay_steps=self.run_config.get("teacher_forcing_decay_steps", 0),
         )
 
         # make a noise scheduler

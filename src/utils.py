@@ -321,19 +321,19 @@ class LinearScheduler(BaseScheduler):
         start: float = 1.0,
         end: float = 0.0,
         warmup_steps: int = 0,
-        total_steps: int = 100,
+        decay_steps: int = 100,
     ):
         super().__init__(start, end, warmup_steps)
-        self.total_steps = total_steps
+        self.decay_steps = decay_steps
 
     def get_value(self):
         if self.current_step < self.warmup_steps:
             return self.start
         effective_step = self.current_step - self.warmup_steps
-        if effective_step >= self.total_steps:
+        if effective_step >= self.decay_steps:
             return self.end
         return self.start + (self.end - self.start) * (
-            effective_step / self.total_steps
+            effective_step / self.decay_steps
         )
 
 
