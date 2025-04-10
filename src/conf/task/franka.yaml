@@ -10,7 +10,7 @@ params:
   control: effort
   include_velocity: false
   max_acceleration: 300.0
-  dof: 3
+  dof: 4
   include_sin_cos: false
   render_interval: 1
   set_joint_velocity_target: false

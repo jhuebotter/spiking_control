@@ -18,14 +18,14 @@ model:
     tau_mem: 0.01
     tau_syn: 0.002
   activation:
-    type: sigmoidspike
-    beta: 25
+    type: gaussianspike
+    beta: 10
   connection:
     n_dims: null
     latent_bias: false
-  hidden_dim: 500
+  hidden_dim: 512
   initializer:
-    alpha: 0.8
+    alpha: 0.9
     mu_u: 0.0
     sigma_u: 1.0
     nu: 125
@@ -73,7 +73,7 @@ run:
   early_stop_metric: "test average steps on target"
   early_stop_patience: 0
   early_stop_mode: "max"
-  lr_decay: 1.0
+  lr_decay: 0.97
   lr_warmup_steps: 0
   lr_end: 0.0001
   teacher_forcing_start: 1.0
@@ -97,7 +97,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
-  batches_per_iteration: 25
+  batches_per_iteration: 15
   total_steps: ${mul:${task.steps_per_iteration}, ${run.iterations}}
 
 hydra:
