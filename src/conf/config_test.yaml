@@ -79,7 +79,7 @@ run:
   lr_warmup_steps: 0
   lr_end: 0.0001
   teacher_forcing_start: 1.0
-  teacher_forcing_end: 0.0
+  teacher_forcing_end: 1.0
   teacher_forcing_warmup_steps: 0
   teacher_forcing_decay_steps: 0
   action_noise_std: 0.0
