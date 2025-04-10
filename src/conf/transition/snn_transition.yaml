@@ -16,7 +16,7 @@ model:
       weights:
         - type: L2
           kwargs:
-            strength: ${transition.wl2}
+            strength: ${weight_reg.l2}
 
 optimizer:
   type: ${optimizer.type}

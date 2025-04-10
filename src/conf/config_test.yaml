@@ -61,10 +61,8 @@ UpperBoundL2:
   threshold: 0.3
   basis: out
   dims: null
-transition:
-  wl2: 0.0
-policy:
-  wl2: 0.0
+weight_reg:
+  l2: 0.0
 
 run:
   encoder1: identity
