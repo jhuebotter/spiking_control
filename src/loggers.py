@@ -2,6 +2,7 @@ import wandb
 from .extratypes import *
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.animation import FFMpegWriter
 import numpy as np
 import torch
 from rich.pretty import pprint
@@ -720,7 +721,13 @@ class MediaLogger(BaseLogger):
             print("updating existing animation!")
 
         if self.video_format == "mp4":
-            animation.save(path)
+            writer = FFMpegWriter(
+                codec="libx264",
+                bitrate=2500,  # Increased bitrate for better quality
+                metadata=dict(artist="Me"),
+                extra_args=["-preset", "fast", "-crf", "23"],
+            )
+            animation.save(path, writer=writer)
 
         elif self.video_format == "gif":
             animation.save(path, writer="imagemagick")

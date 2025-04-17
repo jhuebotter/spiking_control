@@ -175,8 +175,10 @@ def make_optimizer(
         Opt = torch.optim.SGD
     elif optim == "smorms3":
         from control_stork.optimizers import SMORMS3
-
         Opt = SMORMS3
+    elif optim == "soap":
+        from control_stork.optimizers import SOAP
+        Opt = SOAP
     else:
         raise NotImplementedError(f"The optimizer {optim} is not implemented")
 

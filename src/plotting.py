@@ -17,6 +17,7 @@ from .eval_helpers import make_predictions
 from .memory import Episode
 from celluloid import Camera
 
+
 def render_video(
     framestacks: list[FrameStack],
     framerate: int = 30,
@@ -207,7 +208,6 @@ def animate_prediction(
 # Static Plotting Functions
 # -------------------------------
 
-
 def compute_distance(position, target):
     """
     Compute the Euclidean distance between corresponding points in the
@@ -362,6 +362,30 @@ def add_buffer_limits(
         ax.set_zlim(z_min - z_buffer, z_max + z_buffer)
 
 
+def set_axes_equal(ax):
+    """
+    Set the aspect ratio of the 3D plot to be equal.
+    This ensures that the sphere appears round.
+    """
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = x_limits[1] - x_limits[0]
+    y_range = y_limits[1] - y_limits[0]
+    z_range = z_limits[1] - z_limits[0]
+
+    max_range = max(x_range, y_range, z_range)
+
+    x_middle = (x_limits[0] + x_limits[1]) / 2
+    y_middle = (y_limits[0] + y_limits[1]) / 2
+    z_middle = (z_limits[0] + z_limits[1]) / 2
+
+    ax.set_xlim3d([x_middle - max_range / 2, x_middle + max_range / 2])
+    ax.set_ylim3d([y_middle - max_range / 2, y_middle + max_range / 2])
+    ax.set_zlim3d([z_middle - max_range / 2, z_middle + max_range / 2])
+
+
 def plot_trajectory_2d(
     position,
     target,
@@ -414,7 +438,7 @@ def plot_trajectory_2d(
             label="Base",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
     if target_marker:
         if on_target_line is not None:
@@ -426,7 +450,7 @@ def plot_trajectory_2d(
                 linestyle="-",
                 edgecolor="black",
                 linewidth=0.5,
-                zorder=2
+                zorder=2,
             )
             ax_traj.add_artist(circle)
             ax_traj.scatter(
@@ -438,7 +462,7 @@ def plot_trajectory_2d(
                 label="Target",
                 edgecolor="black",
                 linewidth=0.5,
-                zorder=2
+                zorder=2,
             )
         else:
             ax_traj.scatter(
@@ -450,7 +474,7 @@ def plot_trajectory_2d(
                 label="Target",
                 edgecolor="black",
                 linewidth=0.5,
-                zorder=2
+                zorder=2,
             )
     if position_marker:
         ax_traj.scatter(
@@ -462,7 +486,7 @@ def plot_trajectory_2d(
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
         ax_traj.scatter(
             position[-1, 0],
@@ -473,7 +497,7 @@ def plot_trajectory_2d(
             label="Final Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
 
     # Set axis limits for 2D plot.
@@ -607,7 +631,7 @@ def plot_trajectory_3d(
             label="Base",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
     if target_marker:
         if on_target_line is not None:
@@ -637,7 +661,7 @@ def plot_trajectory_3d(
                 edgecolor="black",
                 linewidth=0.5,
                 alpha=0.7,
-                zorder=2
+                zorder=2,
             )
         else:
             ax_traj.scatter(
@@ -650,7 +674,7 @@ def plot_trajectory_3d(
                 label="Target",
                 edgecolor="black",
                 linewidth=0.5,
-                zorder=2
+                zorder=2,
             )
     if position_marker:
         ax_traj.scatter(
@@ -663,7 +687,7 @@ def plot_trajectory_3d(
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
         ax_traj.scatter(
             position[-1, 0],
@@ -675,11 +699,11 @@ def plot_trajectory_3d(
             label="Final Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
 
     # Set axis limits.
-    z_min = min(position[:, 2].min(), target[:, 2].min())
+    z_min = min(position[:, 2].min(), target[:, 2].min(), 0)
     z_max = max(position[:, 2].max(), target[:, 2].max())
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
@@ -690,6 +714,12 @@ def plot_trajectory_3d(
         x_max = max(position[:, 0].max(), target[:, 0].max())
         y_min = min(position[:, 1].min(), target[:, 1].min())
         y_max = max(position[:, 1].max(), target[:, 1].max())
+        # make sure the x and y axis are centered at 0
+        x_min = min(x_min, -x_max)
+        x_max = max(x_max, -x_min)
+        y_min = min(y_min, -y_max)
+        y_max = max(y_max, -y_min)
+        # add a buffer to the axis limits
         add_buffer_limits(ax_traj, x_min, x_max, y_min, y_max, z_min, z_max)
 
     labelpad = 0
@@ -708,6 +738,7 @@ def plot_trajectory_3d(
         ax_traj.set_zlabel("Z", labelpad=labelpad)
 
     # Set equal aspect ratio for all axes
+    set_axes_equal(ax_traj)
     ax_traj.set_box_aspect([1, 1, 1])
 
     # Set the color of the axes panes to white.
@@ -725,173 +756,144 @@ def plot_trajectory_3d(
 
     # --- New: Add shadow projections ("shadows") for each marker ---
     if show_shadows:
-        shadow_alpha = 0.1
-
-        # Get lower bound for z (XY-plane), maximum y for XZ-plane, and lower bound for x (YZ-plane).
+        # Obtain projection coordinates.
         x_low = ax_traj.get_xlim()[0]
-        y_high = ax_traj.get_ylim()[1]  # For XZ-plane, use maximum y.
+        y_high = ax_traj.get_ylim()[1]
         z_low = ax_traj.get_zlim()[0]
-
+        shadow_edge = "#A9A9A9"  # Slightly lighter shadow color for better visibility
+        # Static shadows for base and start markers (outline only).
         if base_marker:
-            # Base marker shadows: use marker 'P'
             ax_traj.scatter(
                 0,
                 0,
                 z_low,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="P",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 0,
                 y_high,
                 0,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="P",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 x_low,
                 0,
                 0,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="P",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
-        if target_marker:
-            if on_target_line is not None:
-                # Draw the sphere shadow
-                x_shadow = np.full_like(x, x_low)
-                y_shadow = np.full_like(y, y_high)
-                z_shadow = np.full_like(z, z_low)
-                ax_traj.plot_surface(
-                    x,
-                    y,
-                    z_shadow,
-                    color="black",
-                    alpha=shadow_alpha,
-                    linewidth=0,
-                    shade=False,
-                )
-                ax_traj.plot_surface(
-                    x,
-                    y_shadow,
-                    z,
-                    color="black",
-                    alpha=shadow_alpha,
-                    linewidth=0,
-                    shade=False,
-                )
-                ax_traj.plot_surface(
-                    x_shadow,
-                    y,
-                    z,
-                    color="black",
-                    alpha=shadow_alpha,
-                    linewidth=0,
-                    shade=False,
-                )
-            else:
-                # Target marker shadows: use marker 'o'
-                ax_traj.scatter(
-                    target[-1, 0],
-                    target[-1, 1],
-                    z_low,
-                    color="black",
-                    s=50,
-                    marker="o",
-                    alpha=shadow_alpha,
-                    depthshade=False,
-                )
-                ax_traj.scatter(
-                    target[-1, 0],
-                    y_high,
-                    target[-1, 2],
-                    color="black",
-                    s=50,
-                    marker="o",
-                    alpha=shadow_alpha,
-                    depthshade=False,
-                )
-                ax_traj.scatter(
-                    x_low,
-                    target[-1, 1],
-                    target[-1, 2],
-                    color="black",
-                    s=50,
-                    marker="o",
-                    alpha=shadow_alpha,
-                    depthshade=False,
-                )
         if position_marker:
-            # Start marker shadows: use marker '*'
             ax_traj.scatter(
                 position[0, 0],
                 position[0, 1],
                 z_low,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=100,
                 marker="*",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 position[0, 0],
                 y_high,
                 position[0, 2],
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=100,
                 marker="*",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 x_low,
                 position[0, 1],
                 position[0, 2],
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=100,
                 marker="*",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
-            # Final marker shadows: use marker 'X'
-            ax_traj.scatter(
-                position[-1, 0],
-                position[-1, 1],
+        # Dynamic shadows for target and final markers (outline only).
+        if target_marker:
+            shadow_xy_target = ax_traj.scatter(
+                target[0, 0],
+                target[0, 1],
                 z_low,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
-                marker="X",
-                alpha=shadow_alpha,
+                marker="o",
                 depthshade=False,
             )
-            ax_traj.scatter(
-                position[-1, 0],
+            shadow_xz_target = ax_traj.scatter(
+                target[0, 0],
                 y_high,
-                position[-1, 2],
-                color="black",
+                target[0, 2],
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
-                marker="X",
-                alpha=shadow_alpha,
+                marker="o",
                 depthshade=False,
             )
-            ax_traj.scatter(
+            shadow_yz_target = ax_traj.scatter(
                 x_low,
-                position[-1, 1],
-                position[-1, 2],
-                color="black",
+                target[0, 1],
+                target[0, 2],
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
-                marker="X",
-                alpha=shadow_alpha,
+                marker="o",
                 depthshade=False,
             )
+        else:
+            shadow_xy_target = shadow_xz_target = shadow_yz_target = None
+        if position_marker:
+            shadow_xy_final = ax_traj.scatter(
+                position[0, 0],
+                position[0, 1],
+                z_low,
+                facecolors="none",
+                edgecolors=shadow_edge,
+                s=50,
+                marker="X",
+                depthshade=False,
+            )
+            shadow_xz_final = ax_traj.scatter(
+                position[0, 0],
+                y_high,
+                position[0, 2],
+                facecolors="none",
+                edgecolors=shadow_edge,
+                s=50,
+                marker="X",
+                depthshade=False,
+            )
+            shadow_yz_final = ax_traj.scatter(
+                x_low,
+                position[0, 1],
+                position[0, 2],
+                facecolors="none",
+                edgecolors=shadow_edge,
+                s=50,
+                marker="X",
+                depthshade=False,
+            )
+        else:
+            shadow_xy_final = shadow_xz_final = shadow_yz_final = None
+    else:
+        shadow_xy_target = shadow_xz_target = shadow_yz_target = None
+        shadow_xy_final = shadow_xz_final = shadow_yz_final = None
 
     # --- Bottom subplot: Distance over time ---
     distance = compute_distance(position, target)
@@ -919,7 +921,7 @@ def plot_trajectory_3d(
     return fig, (ax_traj, ax_dist)
 
 
-def plot_trajectory(position, target, cmap="rainbow", figsize=(7, 6)):
+def plot_trajectory(position, target, cmap="rainbow_r", figsize=(7, 6), **kwargs):
     """
     Plots a trajectory (position) and target trajectory.
     If the input arrays have 2 columns, a 2D plot is created;
@@ -938,9 +940,13 @@ def plot_trajectory(position, target, cmap="rainbow", figsize=(7, 6)):
     if position.shape[1] != target.shape[1]:
         raise ValueError("Position and target must have the same spatial dimension.")
     if position.shape[1] == 2:
-        return plot_trajectory_2d(position, target, cmap=cmap, figsize=figsize)
+        return plot_trajectory_2d(
+            position, target, cmap=cmap, figsize=figsize, **kwargs
+        )
     elif position.shape[1] == 3:
-        return plot_trajectory_3d(position, target, cmap=cmap, figsize=figsize)
+        return plot_trajectory_3d(
+            position, target, cmap=cmap, figsize=figsize, **kwargs
+        )
     else:
         raise ValueError("Only 2D or 3D trajectories are supported.")
 
@@ -1024,7 +1030,7 @@ def animate_trajectory_2d(
             label="Base",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
     if target_marker:
         scatter_target = ax_traj.scatter(
@@ -1036,7 +1042,7 @@ def animate_trajectory_2d(
             label="Target",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
     if position_marker:
         ax_traj.scatter(
@@ -1048,7 +1054,7 @@ def animate_trajectory_2d(
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
         scatter_final = ax_traj.scatter(
             position[0, 0],
@@ -1059,7 +1065,7 @@ def animate_trajectory_2d(
             label="Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
 
     # Set axis limits for the trajectory subplot.
@@ -1243,7 +1249,7 @@ def animate_trajectory_3d(
             label="Base",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
     if target_marker:
         if on_target_line is not None:
@@ -1272,7 +1278,7 @@ def animate_trajectory_3d(
                 label="Target",
                 edgecolor="black",
                 linewidth=0.5,
-                zorder=2
+                zorder=2,
             )
         else:
             target_sc = ax_traj.scatter(
@@ -1285,7 +1291,7 @@ def animate_trajectory_3d(
                 label="Target",
                 edgecolor="black",
                 linewidth=0.5,
-                zorder=2
+                zorder=2,
             )
     else:
         target_sc = None
@@ -1300,7 +1306,7 @@ def animate_trajectory_3d(
             label="Start Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
         final_sc = ax_traj.scatter(
             position[0, 0],
@@ -1312,13 +1318,13 @@ def animate_trajectory_3d(
             label="Position",
             edgecolor="black",
             linewidth=0.5,
-            zorder=2
+            zorder=2,
         )
     else:
         final_sc = None
 
     # --- Axis Limits ---
-    z_min = min(position[:, 2].min(), target[:, 2].min())
+    z_min = min(position[:, 2].min(), target[:, 2].min(), 0)
     z_max = max(position[:, 2].max(), target[:, 2].max())
     if ax_lim is not None:
         ax_traj.set_xlim(-ax_lim, ax_lim)
@@ -1329,6 +1335,12 @@ def animate_trajectory_3d(
         x_max = max(position[:, 0].max(), target[:, 0].max())
         y_min = min(position[:, 1].min(), target[:, 1].min())
         y_max = max(position[:, 1].max(), target[:, 1].max())
+        # make sure the x and y axis are centered at 0
+        x_min = min(x_min, -x_max)
+        x_max = max(x_max, -x_min)
+        y_min = min(y_min, -y_max)
+        y_max = max(y_max, -y_min)
+        # add a buffer to the axis limits
         add_buffer_limits(ax_traj, x_min, x_max, y_min, y_max, z_min, z_max)
 
     labelpad = 0
@@ -1348,6 +1360,7 @@ def animate_trajectory_3d(
         ax_traj.set_zlabel("Z", labelpad=labelpad)
 
     # Set equal aspect ratio for all axes
+    set_axes_equal(ax_traj)
     ax_traj.set_box_aspect([1, 1, 1])
 
     # Set the color of the axes panes to white.
@@ -1367,41 +1380,41 @@ def animate_trajectory_3d(
 
     # --- Shadows ---
     if show_shadows:
-        shadow_alpha = 0.1
         # Obtain projection coordinates.
         x_low = ax_traj.get_xlim()[0]
-        y_high = ax_traj.get_ylim()[1]  # For XZ-plane, use maximum y.
+        y_high = ax_traj.get_ylim()[1]
         z_low = ax_traj.get_zlim()[0]
-        # Static shadows for base and start markers.
+        shadow_edge = "#A9A9A9"  # Slightly lighter shadow color for better visibility
+        # Static shadows for base and start markers (outline only).
         if base_marker:
             ax_traj.scatter(
                 0,
                 0,
                 z_low,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="P",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 0,
                 y_high,
                 0,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="P",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 x_low,
                 0,
                 0,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="P",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
         if position_marker:
@@ -1409,97 +1422,64 @@ def animate_trajectory_3d(
                 position[0, 0],
                 position[0, 1],
                 z_low,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=100,
                 marker="*",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 position[0, 0],
                 y_high,
                 position[0, 2],
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=100,
                 marker="*",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             ax_traj.scatter(
                 x_low,
                 position[0, 1],
                 position[0, 2],
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=100,
                 marker="*",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
-        # Create dynamic shadow scatter objects for dynamic markers.
+        # Dynamic shadows for target and final markers (outline only).
         if target_marker:
-            if on_target_line is not None:
-                # Draw the sphere shadow
-                x_shadow = np.full_like(x, x_low)
-                y_shadow = np.full_like(y, y_high)
-                z_shadow = np.full_like(z, z_low)
-                shadow_xy_target = ax_traj.plot_surface(
-                    x,
-                    y,
-                    z_shadow,
-                    color="black",
-                    alpha=shadow_alpha,
-                    linewidth=0,
-                    shade=False,
-                )
-                shadow_xz_target = ax_traj.plot_surface(
-                    x,
-                    y_shadow,
-                    z,
-                    color="black",
-                    alpha=shadow_alpha,
-                    linewidth=0,
-                    shade=False,
-                )
-                shadow_yz_target = ax_traj.plot_surface(
-                    x_shadow,
-                    y,
-                    z,
-                    color="black",
-                    alpha=shadow_alpha,
-                    linewidth=0,
-                    shade=False,
-                )
-            else:
-                shadow_xy_target = ax_traj.scatter(
-                    target[0, 0],
-                    target[0, 1],
-                    z_low,
-                    color="black",
-                    s=50,
-                    marker="o",
-                    alpha=shadow_alpha,
-                    depthshade=False,
-                )
-                shadow_xz_target = ax_traj.scatter(
-                    target[0, 0],
-                    y_high,
-                    target[0, 2],
-                    color="black",
-                    s=50,
-                    marker="o",
-                    alpha=shadow_alpha,
-                    depthshade=False,
-                )
-                shadow_yz_target = ax_traj.scatter(
-                    x_low,
-                    target[0, 1],
-                    target[0, 2],
-                    color="black",
-                    s=50,
-                    marker="o",
-                    alpha=shadow_alpha,
-                    depthshade=False,
-                )
+            shadow_xy_target = ax_traj.scatter(
+                target[0, 0],
+                target[0, 1],
+                z_low,
+                facecolors="none",
+                edgecolors=shadow_edge,
+                s=50,
+                marker="o",
+                depthshade=False,
+            )
+            shadow_xz_target = ax_traj.scatter(
+                target[0, 0],
+                y_high,
+                target[0, 2],
+                facecolors="none",
+                edgecolors=shadow_edge,
+                s=50,
+                marker="o",
+                depthshade=False,
+            )
+            shadow_yz_target = ax_traj.scatter(
+                x_low,
+                target[0, 1],
+                target[0, 2],
+                facecolors="none",
+                edgecolors=shadow_edge,
+                s=50,
+                marker="o",
+                depthshade=False,
+            )
         else:
             shadow_xy_target = shadow_xz_target = shadow_yz_target = None
         if position_marker:
@@ -1507,30 +1487,30 @@ def animate_trajectory_3d(
                 position[0, 0],
                 position[0, 1],
                 z_low,
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="X",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             shadow_xz_final = ax_traj.scatter(
                 position[0, 0],
                 y_high,
                 position[0, 2],
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="X",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
             shadow_yz_final = ax_traj.scatter(
                 x_low,
                 position[0, 1],
                 position[0, 2],
-                color="black",
+                facecolors="none",
+                edgecolors=shadow_edge,
                 s=50,
                 marker="X",
-                alpha=shadow_alpha,
                 depthshade=False,
             )
         else:
@@ -1643,7 +1623,7 @@ def animate_trajectory_3d(
 
 
 def animate_trajectory(
-    position, target, cmap="rainbow", fps=10, skip=1, figsize=(4, 5)
+    position, target, cmap="rainbow_r", fps=10, skip=1, figsize=(4, 5), **kwargs
 ):
     """
     Wrapper that selects the 2D or 3D animation based on the input array dimensions.
@@ -1654,11 +1634,11 @@ def animate_trajectory(
         raise ValueError("Position and target must have the same spatial dimension.")
     if position.shape[1] == 2:
         return animate_trajectory_2d(
-            position, target, cmap=cmap, fps=fps, skip=skip, figsize=figsize
+            position, target, cmap=cmap, fps=fps, skip=skip, figsize=figsize, **kwargs
         )
     elif position.shape[1] == 3:
         return animate_trajectory_3d(
-            position, target, cmap=cmap, fps=fps, skip=skip, figsize=figsize
+            position, target, cmap=cmap, fps=fps, skip=skip, figsize=figsize, **kwargs
         )
     else:
         raise ValueError("Only 2D or 3D trajectories are supported.")
