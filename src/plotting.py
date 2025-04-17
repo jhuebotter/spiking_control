@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import matplotlib as mpl
+
 mpl.use("Agg")
 import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation
@@ -18,7 +19,7 @@ from celluloid import Camera
 
 font_scale = 1.0
 
-rc={
+rc = {
     "lines.linewidth": 1.5,
     "figure.titleweight": "normal",
     "lines.markersize": 8,
@@ -27,7 +28,7 @@ rc={
     "axes.labelsize": 12 * font_scale,
     "font.size": 12 * font_scale,
     "axes.titlesize": 12 * font_scale,
-    "axes.labelsize": 12* font_scale,
+    "axes.labelsize": 12 * font_scale,
     "axes.labelweight": "normal",
     "axes.titleweight": "normal",
     "legend.fontsize": 12 * font_scale,
@@ -37,20 +38,20 @@ rc={
     "text.usetex": True,
     "text.latex.preamble": r"\usepackage{amsmath, amssymb, cmbright}",
     "axes.unicode_minus": True,
-    #"font.family": "Helvetica",
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
+    # "font.family": "Helvetica",
+    "figure.dpi": 150,
+    "savefig.dpi": 150,
     "legend.frameon": False,
     "legend.loc": "upper center",
-    #"figure.constrained_layout.use" : True,
-    }
+    # "figure.constrained_layout.use" : True,
+}
 
 mpl.rcParams.update(rc)
 
 
 def render_video(
     framestacks: list[FrameStack],
-    framerate: int = 30,
+    framerate: int = 50,
     dpi: int = 70,
     save: Optional[Union[Path, str]] = "",
     max_stacks: int = 8,
@@ -98,21 +99,19 @@ def render_video(
 
 def animate_predictions(
     episodes: list[Episode],
-    transition_model: torch.nn.Module,
+    prediction_model: torch.nn.Module,
     labels: list[str],
     unroll: int = 1,
     warmup: int = 0,
     step: int = 10,
     deterministic: bool = True,
-    fps: int = 30,
-    dpi: int = 50,
-    font_size: int = 12,
+    fps: int = 50,
     save: Optional[Union[Path, str]] = "",
     max_animations: int = 1,
 ) -> object:
 
     predictions = make_predictions(
-        transition_model=transition_model,
+        prediction_model=prediction_model,
         episodes=episodes,
         warmup=warmup,
         unroll=unroll,
@@ -141,8 +140,6 @@ def animate_predictions(
             warmup,
             step,
             fps,
-            dpi,
-            font_size,
             save,
         )
         animations.append(animation)
@@ -157,8 +154,6 @@ def animate_prediction(
     warmup: int = 0,
     step: int = 10,
     fps: int = 30,
-    dpi: int = 100,
-    fontsize: int = 12,
     save: Optional[Union[Path, str]] = "",
 ) -> object:
     """animate predictions and save to disk
@@ -169,19 +164,16 @@ def animate_prediction(
         warmup: number of steps to warmup the model
         fps: frames per second
         dpi: dots per inch
-        fontsize: font size for the legend
         save: path to save the video to
 
     Returns:
         animation object
     """
 
-    # plt.rcParams["font.size"] = f"{fontsize}"
-
     T, h, D = predictions.shape
     T = T * step
 
-    fig, ax = plt.subplots(D, figsize=(5, D), sharex=True, sharey=True, dpi=dpi)
+    fig, ax = plt.subplots(D, figsize=(5, D), sharex=True, sharey=True)
     plt.ylim(-1.1, 1.1)
 
     cmap = plt.get_cmap("plasma")
@@ -191,9 +183,9 @@ def animate_prediction(
     # make an initial snapshot without prediction
     for d in range(D):
         ax[d].plot([o[d] for o in next_states], c="g", alpha=0.5)
-        ax[d].set_ylabel(labels[d], fontsize=fontsize)
-        ax[d].tick_params(axis="both", which="major", labelsize=fontsize)
-    ax[-1].set_xlabel("step", fontsize=fontsize)
+        ax[d].set_ylabel(labels[d])
+        ax[d].tick_params(axis="both", which="major")
+    ax[-1].set_xlabel("step")
     plt.tight_layout()
 
     camera.snap()
@@ -234,6 +226,7 @@ def animate_prediction(
 # -------------------------------
 # Static Plotting Functions
 # -------------------------------
+
 
 def compute_distance(position, target):
     """
@@ -1758,11 +1751,11 @@ class TrajectoryPlotter:
     def extract(self, episode):
         hand_positions = []
         target_positions = []
-        for transition in episode:
+        for prediction in episode:
             hand_positions.append(
-                transition.state[self.hand_idx].detach().cpu().numpy()
+                prediction.state[self.hand_idx].detach().cpu().numpy()
             )
-            target_positions.append(transition.target.detach().cpu().numpy())
+            target_positions.append(prediction.target.detach().cpu().numpy())
         hand_positions = np.stack(hand_positions, axis=0)
         target_positions = np.stack(target_positions, axis=0)
         trajectory = {"position": hand_positions, "target": target_positions}

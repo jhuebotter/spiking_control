@@ -34,8 +34,8 @@ class Transition:
 class Episode:
     steps_: list[Transition] = field(default_factory=list)
 
-    def append(self, transition: Transition) -> None:
-        self.steps_.append(transition)
+    def append(self, prediction: Transition) -> None:
+        self.steps_.append(prediction)
 
     def get_cumulative_reward(self) -> float:
         return sum([step.reward for step in self.steps_])

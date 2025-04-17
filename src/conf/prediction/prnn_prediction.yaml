@@ -16,7 +16,7 @@ model:
       weights:
         - type: L2
           kwargs:
-            strength: ${transition.wl2}
+            strength: ${prediction.wl2}
 
 learning:
   params:

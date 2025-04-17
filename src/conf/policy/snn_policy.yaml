@@ -26,4 +26,4 @@ optimizer:
 learning:
   params:
     unroll_steps: 40
-    deterministic_transition: True
+    deterministic_prediction: True

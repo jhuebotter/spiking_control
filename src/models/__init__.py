@@ -1,15 +1,15 @@
 from .snn import (
     BaseRSNN,
     PolicyNetRSNN,
-    TransitionNetRSNN,
+    PredictionNetRSNN,
 )
 from .prnn import (
     BasePRNN,
     PolicyNetPRNN,
-    TransitionNetPRNN,
+    PredictionNetPRNN,
 )
 
 from .utils import (
-    make_transition_model,
+    make_prediction_model,
     make_policy_model,
 )

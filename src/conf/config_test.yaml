@@ -1,10 +1,12 @@
 defaults:
-  - task: franka
+  - task: reacher
   - agent: pred_agent
   - policy: snn_policy
-  - transition: snn_transition
+  - prediction: snn_prediction
   - logging: logging
   - _self_
+
+
 
 seed: 42
 experiment: test

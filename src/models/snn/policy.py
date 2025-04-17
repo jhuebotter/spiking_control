@@ -74,7 +74,7 @@ class PolicyNetRSNN(BaseRSNN):
             regularizers=regularizers,
             w_regularizers=w_regularizers,
             device=device,
-            name="policy model",
+            name="Policy model",
             **kwargs,
         )
 
@@ -102,7 +102,7 @@ class PolicyNetRSNN(BaseRSNN):
     def train_fn(
         self,
         memory: EpisodeMemory,
-        transition_model: BaseRSNN,
+        prediction_model: BaseRSNN,
         loss_gain: Optional[dict] = None,
         batch_size: int = 128,
         warmup_steps: int = 5,
@@ -111,12 +111,12 @@ class PolicyNetRSNN(BaseRSNN):
         action_smoothness_reg_weight: float = 0.0,
         relative_l2_weight: float = 1.0,
         max_norm: Optional[float] = None,
-        deterministic_transition: bool = False,
+        deterministic_prediction: bool = False,
         record: bool = False,
         excluded_monitor_keys: Optional[list[str]] = None,
     ) -> dict:
 
-        # sample a batch of transitions
+        # sample a batch of predictions
         (
             states,
             targets,
@@ -136,16 +136,16 @@ class PolicyNetRSNN(BaseRSNN):
 
         # reset the model
         self.train()
-        transition_model.train()
+        prediction_model.train()
         self.zero_grad()
-        transition_model.zero_grad()
+        prediction_model.zero_grad()
         self.reset_state()
-        transition_model.reset_state()
+        prediction_model.reset_state()
 
         # warmup the model
         if warmup_steps:
             self(states[:warmup_steps], targets[:warmup_steps], record=record)
-            transition_model(states[:warmup_steps], actions[:warmup_steps])
+            prediction_model(states[:warmup_steps], actions[:warmup_steps])
 
         new_state_hat = states[-1]
         target = targets[-1]
@@ -154,8 +154,8 @@ class PolicyNetRSNN(BaseRSNN):
         action_hats = []
         for i in range(unroll_steps):
             action_hat = self(new_state_hat, target, record=record)
-            new_state_delta_hat = transition_model(
-                new_state_hat, action_hat, deterministic=deterministic_transition
+            new_state_delta_hat = prediction_model(
+                new_state_hat, action_hat, deterministic=deterministic_prediction
             )
             new_state_hat = new_state_hat + new_state_delta_hat
             policy_loss += self.criterion(

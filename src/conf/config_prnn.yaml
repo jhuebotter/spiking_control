@@ -2,7 +2,7 @@ defaults:
   - task: reacher
   - agent: pred_agent
   - policy: prnn_policy
-  - transition: prnn_transition
+  - prediction: prnn_prediction
   - logging: logging
   - _self_
 
@@ -38,7 +38,7 @@ optimizer:
   params:
     lr: 0.005
 
-transition:
+prediction:
   wl2: 0.0
 policy:
   wl2: 0.0

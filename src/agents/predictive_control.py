@@ -1,6 +1,6 @@
 from . import BaseAgent
 from src.memory import EpisodeMemory, Transition, Episode
-from src.models import make_transition_model, make_policy_model
+from src.models import make_prediction_model, make_policy_model
 from ..utils import (
     make_optimizer,
     dict_mean,
@@ -8,7 +8,7 @@ from ..utils import (
     LinearScheduler,
     ExponentialScheduler,
     StepScheduler,
-    LRSchedulerWrapper
+    LRSchedulerWrapper,
 )
 from src.eval_helpers import baseline_prediction
 
@@ -46,7 +46,7 @@ class PredictiveControlAgent(BaseAgent):
 
         # initialize config
         self.memory_config = config.agent.memory
-        self.transition_config = config.transition
+        self.prediction_config = config.prediction
         self.policy_config = config.policy
         self.run_config = config.run
         self.plotting_config = config.plotting
@@ -55,10 +55,10 @@ class PredictiveControlAgent(BaseAgent):
         self.reset_memory = config.agent.reset_memory
         self.steps_per_iteration = config.agent.steps_per_iteration
         self.steps_per_evaluation = config.agent.steps_per_evaluation
-        self.transition_batches_per_iteration = (
-            self.transition_config.learning.params.get("batches_per_iteration", 1)
+        self.prediction_batches_per_iteration = (
+            self.prediction_config.learning.params.get("batches_per_iteration", 1)
         )
-        self.transition_batch_size = self.transition_config.learning.params.get(
+        self.prediction_batch_size = self.prediction_config.learning.params.get(
             "batch_size", 128
         )
         self.policy_batches_per_iteration = self.policy_config.learning.params.get(
@@ -82,10 +82,10 @@ class PredictiveControlAgent(BaseAgent):
         self.memory = EpisodeMemory(**self.memory_config.params)
 
         # initialize models
-        self.transition_model = make_transition_model(
+        self.prediction_model = make_prediction_model(
             action_dim=self.action_dim,
             state_dim=self.state_dim,
-            config=self.transition_config.model,
+            config=self.prediction_config.model,
         ).to(self.device)
 
         self.policy_model = make_policy_model(
@@ -94,12 +94,12 @@ class PredictiveControlAgent(BaseAgent):
             target_dim=self.target_dim,
             config=self.policy_config.model,
         ).to(self.device)
-        self.models = [self.transition_model, self.policy_model]
+        self.models = [self.prediction_model, self.policy_model]
 
         # initialize optimizers
-        self.transition_model.set_optimizer(
+        self.prediction_model.set_optimizer(
             make_optimizer(
-                self.transition_model, self.transition_config.get("optimizer", {})
+                self.prediction_model, self.prediction_config.get("optimizer", {})
             )
         )
 
@@ -108,14 +108,14 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # make a learning rate scheduler
-        transition_model_lr_scheduler = ExponentialScheduler(
-            start=self.transition_config.optimizer.params.get("lr", 1e-3),
+        prediction_model_lr_scheduler = ExponentialScheduler(
+            start=self.prediction_config.optimizer.params.get("lr", 1e-3),
             end=self.run_config.get("lr_end", 0),
             gamma=self.run_config.get("lr_decay", 1.0),
             warmup_steps=self.run_config.get("lr_warmup_steps", 0),
         )
-        self.transition_model_lr_scheduler = LRSchedulerWrapper(
-            self.transition_model.optimizer, transition_model_lr_scheduler
+        self.prediction_model_lr_scheduler = LRSchedulerWrapper(
+            self.prediction_model.optimizer, prediction_model_lr_scheduler
         )
 
         policy_model_lr_scheduler = ExponentialScheduler(
@@ -129,7 +129,7 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         # make a teacher forcing scheduler
-        self.transition_model_tf_scheduler = LinearScheduler(
+        self.prediction_model_tf_scheduler = LinearScheduler(
             self.run_config.get("teacher_forcing_start", 1.0),
             end=self.run_config.get("teacher_forcing_end", 1.0),
             warmup_steps=self.run_config.get("teacher_forcing_warmup_steps", 0),
@@ -176,7 +176,7 @@ class PredictiveControlAgent(BaseAgent):
         self.epochs = 0
         self.iterations = 0
         self.policy_updates = 0
-        self.transition_updates = 0
+        self.prediction_updates = 0
 
         # initialize early stopping
         self.early_stop_metric = self.run_config.get("early_stop_metric", None)
@@ -211,9 +211,9 @@ class PredictiveControlAgent(BaseAgent):
     def step_scheduler(self):
 
         # first get the current parameters from the schedulers
-        transition_lr = self.transition_model_lr_scheduler.get_value()
+        prediction_lr = self.prediction_model_lr_scheduler.get_value()
         policy_lr = self.policy_model_lr_scheduler.get_value()
-        transition_teacher_forcing_p = self.transition_model_tf_scheduler.get_value()
+        prediction_teacher_forcing_p = self.prediction_model_tf_scheduler.get_value()
         policy_noise_std = self.policy_model_noise_scheduler.get_value()
         action_reg_weight = self.policy_model_action_reg_weight_scheduler.get_value()
         action_smoothness_reg_weight = (
@@ -222,9 +222,9 @@ class PredictiveControlAgent(BaseAgent):
         # log them
         self.log(
             {
-                "transition model learning rate": transition_lr,
+                "prediction model learning rate": prediction_lr,
                 "policy model learning rate": policy_lr,
-                "transition model teacher forcing p": transition_teacher_forcing_p,
+                "prediction model teacher forcing p": prediction_teacher_forcing_p,
                 "policy model noise std": policy_noise_std,
                 "policy model action reg weight": action_reg_weight,
                 "policy model action smoothness reg weight": action_smoothness_reg_weight,
@@ -232,9 +232,9 @@ class PredictiveControlAgent(BaseAgent):
             step=self.epochs,
         )
         # step the schedulers
-        self.transition_model_lr_scheduler.step()
+        self.prediction_model_lr_scheduler.step()
         self.policy_model_lr_scheduler.step()
-        self.transition_model_tf_scheduler.step()
+        self.prediction_model_tf_scheduler.step()
         self.policy_model_noise_scheduler.step()
         self.policy_model_action_reg_weight_scheduler.step()
         self.policy_model_action_smoothness_reg_weight_scheduler.step()
@@ -360,7 +360,7 @@ class PredictiveControlAgent(BaseAgent):
                         dtype=torch.float32,
                     )
 
-                # store the transition
+                # store the prediction
                 for i, (o, t, a, r, d, no) in enumerate(
                     zip(obs, targets, actions, rewards, dones, next_obs)
                 ):
@@ -436,32 +436,32 @@ class PredictiveControlAgent(BaseAgent):
 
         self.log(results, step=self.epochs)
 
-    def train_transition_model(self):
+    def train_prediction_model(self):
 
-        # train the transition model
-        transition_results = []
-        n_transition_batches = self.transition_config.learning.get(
+        # train the prediction model
+        prediction_results = []
+        n_prediction_batches = self.prediction_config.learning.get(
             "batches_per_iteration", 1
         )
-        teacher_forcing_p = self.transition_model_tf_scheduler.get_value()
+        teacher_forcing_p = self.prediction_model_tf_scheduler.get_value()
         pbar = tqdm(
-            range(n_transition_batches), desc=f"{'training transition model':30}"
+            range(n_prediction_batches), desc=f"{'training prediction model':30}"
         )
         for batch in pbar:
-            transition_result = self.transition_model.train_fn(
+            prediction_result = self.prediction_model.train_fn(
                 memory=self.memory,
                 record=False,  # True,
-                excluded_monitor_keys=self.transition_model.plot_monitors
-                + self.transition_model.numeric_monitors,
+                excluded_monitor_keys=self.prediction_model.plot_monitors
+                + self.prediction_model.numeric_monitors,
                 teacher_forcing_p=teacher_forcing_p,
-                **self.transition_config.get("learning", {}).get("params", {}),
+                **self.prediction_config.get("learning", {}).get("params", {}),
             )
-            self.transition_updates += 1
-            loss = transition_result["loss"]
+            self.prediction_updates += 1
+            loss = prediction_result["loss"]
             pbar.set_postfix_str(f"loss: {loss:.5f}")
-            transition_results.append(transition_result)
+            prediction_results.append(prediction_result)
 
-        return transition_results
+        return prediction_results
 
     def train_policy_model(self):
 
@@ -476,7 +476,7 @@ class PredictiveControlAgent(BaseAgent):
         for batch in pbar:
             policy_result = self.policy_model.train_fn(
                 memory=self.memory,
-                transition_model=self.transition_model,
+                prediction_model=self.prediction_model,
                 loss_gain=self.env.unwrapped.call("get_loss_gain")[0],
                 action_reg_weight=action_reg_weight,
                 action_smoothness_reg_weight=action_smoothness_reg_weight,
@@ -495,15 +495,15 @@ class PredictiveControlAgent(BaseAgent):
     def train_epoch(self):
 
         # train the models
-        transition_results = self.train_transition_model()
+        prediction_results = self.train_prediction_model()
         policy_results = self.train_policy_model()
 
-        return transition_results, policy_results
+        return prediction_results, policy_results
 
     def train(self, epochs: int = 1):
 
         for e in range(epochs):
-            transition_results, policy_results = self.train_epoch()
+            prediction_results, policy_results = self.train_epoch()
 
             self.epochs += 1
 
@@ -513,12 +513,12 @@ class PredictiveControlAgent(BaseAgent):
                 "episodes": self.episodes,
                 "epochs": self.epochs,
                 "policy model updates": self.policy_updates,
-                "transition model updates": self.transition_updates,
+                "prediction model updates": self.prediction_updates,
                 "policy model parameters": self.policy_model.count_parameters(),
-                "transition model parameters": self.transition_model.count_parameters(),
+                "prediction model parameters": self.prediction_model.count_parameters(),
             }
             results.update(
-                dict_mean(transition_results, prefix=self.transition_model.name + " ")
+                dict_mean(prediction_results, prefix=self.prediction_model.name + " ")
             )
             results.update(
                 dict_mean(policy_results, prefix=self.policy_model.name + " ")
@@ -583,8 +583,8 @@ class PredictiveControlAgent(BaseAgent):
         with torch.no_grad():
             self.policy_model.eval()
             self.policy_model.reset_state()
-            self.transition_model.eval()
-            self.transition_model.reset_state()
+            self.prediction_model.eval()
+            self.prediction_model.reset_state()
 
             step = 0
             total_reward = 0
@@ -599,7 +599,7 @@ class PredictiveControlAgent(BaseAgent):
                     actions = actions.squeeze(0).clamp(action_min, action_max).detach()
 
                     # predict the next states
-                    _ = self.transition_model.predict(
+                    _ = self.prediction_model.predict(
                         obs, actions, deterministic=True, record=True
                     )
 
@@ -622,7 +622,7 @@ class PredictiveControlAgent(BaseAgent):
                             dtype=torch.float32,
                         )
 
-                    # store the transition
+                    # store the prediction
                     for i, (o, t, a, r, d, no) in enumerate(
                         zip(obs, targets, actions, rewards, dones, next_obs)
                     ):
@@ -678,7 +678,7 @@ class PredictiveControlAgent(BaseAgent):
 
             if not self.manual_video and render:
                 env.stop_recording()
-            
+
         # log the results
         average_reward = total_reward / len(completed_episodes)
         if len(success_tracker) > 0:
@@ -713,11 +713,11 @@ class PredictiveControlAgent(BaseAgent):
         policy_numeric_monitor_results = self.policy_model.get_monitor_data(
             exclude=self.policy_model.plot_monitors
         )
-        transition_numeric_monitor_results = self.transition_model.get_monitor_data(
-            exclude=self.transition_model.plot_monitors
+        prediction_numeric_monitor_results = self.prediction_model.get_monitor_data(
+            exclude=self.prediction_model.plot_monitors
         )
         results.update(policy_numeric_monitor_results)
-        results.update(transition_numeric_monitor_results)
+        results.update(prediction_numeric_monitor_results)
 
         # make the video
         if render:
@@ -730,15 +730,15 @@ class PredictiveControlAgent(BaseAgent):
             policy_plots = self.policy_model.get_monitor_data(
                 exclude=self.policy_model.numeric_monitors
             )
-            transition_plots = self.transition_model.get_monitor_data(
-                exclude=self.transition_model.numeric_monitors
+            prediction_plots = self.prediction_model.get_monitor_data(
+                exclude=self.prediction_model.numeric_monitors
             )
             prediction_videos = {
                 "test prediction animations": animate_predictions(
                     completed_episodes,
-                    self.transition_model,
+                    self.prediction_model,
                     labels=env.unwrapped.get_attr("state_labels")[0],
-                    warmup=self.transition_config.learning.params.get(
+                    warmup=self.prediction_config.learning.params.get(
                         "warmup_steps", 0
                     ),
                     unroll=self.plotting_config.get("prediction_animation_unroll", 1),
@@ -747,16 +747,16 @@ class PredictiveControlAgent(BaseAgent):
             }
             results.update(prediction_videos)
             results.update(policy_plots)
-            results.update(transition_plots)
+            results.update(prediction_plots)
             results.update(trajectory_plots)
             if self.manual_video:
                 episode_videos = {"test episodes": render_video(completed_framestacks)}
                 results.update(episode_videos)
 
         prediction_results = baseline_prediction(
-            transition_model=self.transition_model,
+            prediction_model=self.prediction_model,
             episodes=completed_episodes,
-            warmup=self.transition_config.learning.params.get("warmup_steps", 0),
+            warmup=self.prediction_config.learning.params.get("warmup_steps", 0),
             unroll=self.run_config.get("prediction_unroll", 1),
         )
         results.update(prediction_results)
@@ -767,13 +767,13 @@ class PredictiveControlAgent(BaseAgent):
 
     def save_models(self):
 
-        self.save_transition_model()
+        self.save_prediction_model()
         self.save_policy_model()
 
-    def save_transition_model(
+    def save_prediction_model(
         self,
         dir: Optional[str] = None,
-        file: str = "transition_model.cpt",
+        file: str = "prediction_model.cpt",
         save_optimizer: bool = True,
     ):
 
@@ -781,10 +781,10 @@ class PredictiveControlAgent(BaseAgent):
             dir = Path(self.dir, "models")
 
         self.save(
-            model=self.transition_model,
+            model=self.prediction_model,
             dir=dir,
             file=file,
-            optimizer=self.transition_model.get_optimizer() if save_optimizer else None,
+            optimizer=self.prediction_model.get_optimizer() if save_optimizer else None,
         )
 
     def save_policy_model(
@@ -806,11 +806,11 @@ class PredictiveControlAgent(BaseAgent):
 
     def load_models(self, dir: Optional[str] = None):
 
-        self.load_transition_model(dir)
+        self.load_prediction_model(dir)
         self.load_policy_model(dir)
 
-    def load_transition_model(
-        self, dir: Optional[str] = None, file: str = "transition_model.cpt"
+    def load_prediction_model(
+        self, dir: Optional[str] = None, file: str = "prediction_model.cpt"
     ):
 
         if dir is None:
@@ -819,13 +819,13 @@ class PredictiveControlAgent(BaseAgent):
         dir = Path(dir)
         path = Path(dir, file)
 
-        self.transition_model, op = self.load(
-            model=self.transition_model,
+        self.prediction_model, op = self.load(
+            model=self.prediction_model,
             path=path,
-            optim=self.transition_model.get_optimizer(),
+            optim=self.prediction_model.get_optimizer(),
         )
         if op is not None:
-            self.transition_model.set_optimizer(op)
+            self.prediction_model.set_optimizer(op)
 
     def load_policy_model(
         self, dir: Optional[str] = None, file: str = "policy_model.cpt"

@@ -1,5 +1,5 @@
 import torch
-from . import TransitionNetRSNN, TransitionNetPRNN, PolicyNetRSNN, PolicyNetPRNN
+from . import PredictionNetRSNN, PredictionNetPRNN, PolicyNetRSNN, PolicyNetPRNN
 from control_stork import activations, initializers
 from control_stork.nodes import (
     CellGroup,
@@ -32,7 +32,7 @@ from src.utils import conf_to_dict
 from src.extratypes import *
 
 
-def make_transition_model(
+def make_prediction_model(
     action_dim: int, state_dim: int, config: dict, verbose: bool = True, **kwargs
 ) -> torch.nn.Module:
     """create a policy network according to the parameters specified by the config file and task."""
@@ -43,7 +43,8 @@ def make_transition_model(
     params = {
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
-        "num_ff_layers": config.params.get("num_layers", 2) - config.params.get("num_rec_layers", 0),
+        "num_ff_layers": config.params.get("num_layers", 2)
+        - config.params.get("num_rec_layers", 0),
         **kwargs,
     }
 
@@ -51,10 +52,10 @@ def make_transition_model(
     params["input_encoder"] = make_input_encoder(config.params.encoder)
 
     if type_ == "prnn":
-        model = TransitionNetPRNN
+        model = PredictionNetPRNN
         params.update(make_prnn_objects(config))
     elif type_ == "rsnn":
-        model = TransitionNetRSNN
+        model = PredictionNetRSNN
         params.update(make_snn_objects(config))
         params.update(
             {
@@ -64,7 +65,7 @@ def make_transition_model(
             }
         )
     else:
-        raise NotImplementedError(f"the transition model {type_} is not implemented")
+        raise NotImplementedError(f"the prediction model {type_} is not implemented")
 
     # make the activation function
     params["activation"] = make_act_fn(
@@ -74,15 +75,15 @@ def make_transition_model(
     if params["activation"] is None:
         params.pop("activation")
 
-    transitionnet = model(
+    predictionnet = model(
         action_dim=action_dim,
         state_dim=state_dim,
         **params,
     )
     if verbose:
-        print(transitionnet)
+        print(predictionnet)
 
-    return transitionnet
+    return predictionnet
 
 
 def make_policy_model(
@@ -99,7 +100,8 @@ def make_policy_model(
     params = {
         "hidden_dim": config.params.get("hidden_dim", 512),
         "num_rec_layers": config.params.get("num_rec_layers", 0),
-        "num_ff_layers": config.params.get("num_layers", 2) - config.params.get("num_rec_layers", 0),
+        "num_ff_layers": config.params.get("num_layers", 2)
+        - config.params.get("num_rec_layers", 0),
         **kwargs,
     }
 
@@ -170,13 +172,18 @@ def make_prnn_objects(config: DictConfig) -> dict:
     output_scaler = OutputScaler(
         weight_scale=config.params.readout.kwargs.get("weight_scale", 1.0),
         output_scale=config.params.readout.kwargs.get("output_scale", 1.0),
-        learn_weight_scale=config.params.readout.kwargs.get("learn_weight_scale", False),
-        learn_output_scale=config.params.readout.kwargs.get("learn_output_scale", False),
+        learn_weight_scale=config.params.readout.kwargs.get(
+            "learn_weight_scale", False
+        ),
+        learn_output_scale=config.params.readout.kwargs.get(
+            "learn_output_scale", False
+        ),
         apply_tanh=config.params.readout.kwargs.get("apply_tanh", False),
     )
     object_dict["output_scaler"] = output_scaler
 
     return object_dict
+
 
 def make_snn_objects(config: DictConfig) -> dict:
     params = {}
@@ -195,7 +202,9 @@ def make_snn_objects(config: DictConfig) -> dict:
         params.pop("readout_type")
     params["input_kwargs"] = config.params.input.get("kwargs", {})
     params["neuron_kwargs"] = config.params.neuron.get("kwargs", {})
-    params["readout_kwargs"] = OmegaConf.to_object(config.params.readout).get("kwargs", {})
+    params["readout_kwargs"] = OmegaConf.to_object(config.params.readout).get(
+        "kwargs", {}
+    )
 
     # make the activation function
     params["activation"] = make_act_fn(
@@ -421,10 +430,14 @@ class InputScaler(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x * self.get_scaling()
-    
+
     def get_scaling(self) -> torch.Tensor:
-        return torch.exp(self.scaling_param) if hasattr(self, "scaling_param") else self.scaling
-    
+        return (
+            torch.exp(self.scaling_param)
+            if hasattr(self, "scaling_param")
+            else self.scaling
+        )
+
 
 class OutputScaler(torch.nn.Module):
     def __init__(
@@ -457,7 +470,7 @@ class OutputScaler(torch.nn.Module):
         x = x * self.get_weight_scale()
         if self.apply_tanh:
             x = torch.tanh(x) * self.get_output_scale()
-        return x 
+        return x
 
     def get_weight_scale(self) -> torch.Tensor:
         return (

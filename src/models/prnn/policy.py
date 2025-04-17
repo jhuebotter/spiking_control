@@ -22,7 +22,7 @@ class PolicyNetPRNN(BasePRNN):
         activation: Callable = F.leaky_relu,
         device: Union[str, torch.device] = "cpu",
         dtype: torch.dtype = torch.float,
-        name: str = "policy model",
+        name: str = "Policy model",
         **kwargs
     ) -> None:
 
@@ -86,7 +86,7 @@ class PolicyNetPRNN(BasePRNN):
     def train_fn(
         self,
         memory: EpisodeMemory,
-        transition_model: BasePRNN,
+        prediction_model: BasePRNN,
         loss_gain: Optional[dict] = None,
         batch_size: int = 128,
         warmup_steps: int = 5,
@@ -95,14 +95,14 @@ class PolicyNetPRNN(BasePRNN):
         action_smoothness_reg_weight: float = 0.0,
         relative_l2_weight: float = 1.0,
         max_norm: Optional[float] = None,
-        deterministic_transition: bool = False,
+        deterministic_prediction: bool = False,
         action_target_std: Optional[float] = None,
         reg_scale: float = 1.0,
         record: bool = False,
         excluded_monitor_keys: Optional[list[str]] = None,
     ) -> dict:
 
-        # sample a batch of transitions
+        # sample a batch of predictions
         (
             states,
             targets,
@@ -123,16 +123,16 @@ class PolicyNetPRNN(BasePRNN):
 
         # reset the model
         self.train()
-        transition_model.train()
+        prediction_model.train()
         self.zero_grad()
-        transition_model.zero_grad()
+        prediction_model.zero_grad()
         self.reset_state()
-        transition_model.reset_state()
+        prediction_model.reset_state()
 
         # warmup the model
         if warmup_steps:
             self(states[:warmup_steps], targets[:warmup_steps])
-            transition_model(states[:warmup_steps], actions[:warmup_steps])
+            prediction_model(states[:warmup_steps], actions[:warmup_steps])
 
         new_state_hat = states[-1]
         target = targets[-1]
@@ -142,8 +142,8 @@ class PolicyNetPRNN(BasePRNN):
         for i in range(unroll_steps):
             action_mu, action_logvar = self(new_state_hat, target)
             action = self.reparameterize(action_mu, action_logvar)
-            new_state_delta_hat = transition_model.predict(
-                new_state_hat, action, deterministic=deterministic_transition
+            new_state_delta_hat = prediction_model.predict(
+                new_state_hat, action, deterministic=deterministic_prediction
             )
             new_state_hat = new_state_hat + new_state_delta_hat
             # compute the loss

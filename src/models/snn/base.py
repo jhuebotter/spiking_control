@@ -141,6 +141,7 @@ class BaseRSNN(nn.Module):
                     "out",
                     plot_fn=plot_spikes,
                     title=f"{self.name} Recurrent LIF Cell Group {i+1}",
+                    dim=(2, 4),
                 )
             )
             self.model.add_monitor(
@@ -149,6 +150,7 @@ class BaseRSNN(nn.Module):
                     "mem",
                     plot_fn=plot_traces,
                     title=f"{self.name} Recurrent LIF Cell Group {i+1}",
+                    dim=(2, 4),
                 )
             )
             self.model.add_monitor(
@@ -191,6 +193,7 @@ class BaseRSNN(nn.Module):
                     "out",
                     plot_fn=plot_spikes,
                     title=f"{self.name} FF LIF Cell Group {i+1}",
+                    dim=(2, 4),
                 )
             )
             self.model.add_monitor(
@@ -199,6 +202,7 @@ class BaseRSNN(nn.Module):
                     "mem",
                     plot_fn=plot_traces,
                     title=f"{self.name} FF LIF Cell Group {i+1}",
+                    dim=(2, 4),
                 )
             )
             self.model.add_monitor(
@@ -244,6 +248,7 @@ class BaseRSNN(nn.Module):
                 "mem",
                 plot_fn=plot_traces,
                 title=f"{self.name} Readout Layer",
+                dim=(2, 4),
             )
         )
         self.model.add_monitor(
@@ -252,6 +257,7 @@ class BaseRSNN(nn.Module):
                 "out",
                 plot_fn=plot_traces,
                 title=f"{self.name} Readout Layer",
+                dim=(2, 4),
             )
         )
 

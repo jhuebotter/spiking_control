@@ -5,14 +5,14 @@ from tqdm import tqdm
 
 
 def baseline_prediction(
-    transition_model: torch.nn.Module,
+    prediction_model: torch.nn.Module,
     episodes: list[Episode],
     warmup: int = 0,
     unroll: int = 1,
     max_steps: int = 10,
 ) -> dict:
-    device = transition_model.device
-    transition_model.eval()
+    device = prediction_model.device
+    prediction_model.eval()
 
     # get the states, actions, and next states
     states = torch.stack(
@@ -27,8 +27,8 @@ def baseline_prediction(
     ).to(device)
 
     # make 1 step predictions
-    transition_model.reset_state()
-    delta_states = transition_model.predict(states, actions, deterministic=True)
+    prediction_model.reset_state()
+    delta_states = prediction_model.predict(states, actions, deterministic=True)
     predicted_next_states = states + delta_states
     predicted_state_mse = torch.nn.functional.mse_loss(
         predicted_next_states[warmup:], next_states[warmup:]
@@ -40,8 +40,8 @@ def baseline_prediction(
     unrolled_state_mse = torch.zeros(1, device=device)
     if steps > 0:
         for step in range(steps):
-            transition_model.reset_state()
-            _ = transition_model.predict(
+            prediction_model.reset_state()
+            _ = prediction_model.predict(
                 states[step : warmup + step],
                 actions[step : warmup + step],
                 deterministic=True,
@@ -50,7 +50,9 @@ def baseline_prediction(
             state = states[warmup + step : warmup + step + 1]
             for i in range(unroll):
                 action = actions[warmup + step + i : warmup + step + i + 1]
-                delta_state = transition_model.predict(state, action, deterministic=True)
+                delta_state = prediction_model.predict(
+                    state, action, deterministic=True
+                )
                 pred_states[i] = state + delta_state.detach()
                 state = pred_states[i]
             unrolled_state_mse += torch.nn.functional.mse_loss(
@@ -79,7 +81,7 @@ def baseline_prediction(
 
 
 def make_predictions(
-    transition_model: torch.nn.Module,
+    prediction_model: torch.nn.Module,
     episodes: list[Episode],
     warmup: int = 0,
     unroll: int = 1,
@@ -88,8 +90,8 @@ def make_predictions(
 ) -> dict:
     assert warmup >= 1
 
-    device = transition_model.device
-    transition_model.eval()
+    device = prediction_model.device
+    prediction_model.eval()
 
     # get the states, actions, and next states
     states = torch.stack(
@@ -110,7 +112,7 @@ def make_predictions(
         # make unrolled predictions
         if t // step >= predictions.shape[0]:
             break
-        transition_model.reset_state()
+        prediction_model.reset_state()
         for j in range(warmup + unroll):
             if t + j >= T:
                 break
@@ -118,7 +120,7 @@ def make_predictions(
                 state = states[t + j]
             else:
                 state = next_state_hat
-            state_delta_hat = transition_model.predict(
+            state_delta_hat = prediction_model.predict(
                 state, actions[t + j], deterministic=deterministic
             )
             next_state_hat = state + state_delta_hat
