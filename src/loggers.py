@@ -721,11 +721,15 @@ class MediaLogger(BaseLogger):
             print("updating existing animation!")
 
         if self.video_format == "mp4":
+            fps = (
+                1000 / animation._interval
+            )  # Calculate fps from the animation's interval
             writer = FFMpegWriter(
                 codec="libx264",
                 bitrate=2500,  # Increased bitrate for better quality
                 metadata=dict(artist="Me"),
                 extra_args=["-preset", "fast", "-crf", "23"],
+                fps=fps,  # Pass the calculated fps
             )
             animation.save(path, writer=writer)
 

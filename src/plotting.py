@@ -1,8 +1,7 @@
 import torch
 import numpy as np
-import matplotlib as mlp
-
-mlp.use("Agg")
+import matplotlib as mpl
+mpl.use("Agg")
 import matplotlib.animation as animation
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
@@ -16,6 +15,37 @@ from .utils import FrameStack
 from .eval_helpers import make_predictions
 from .memory import Episode
 from celluloid import Camera
+
+font_scale = 1.0
+
+rc={
+    "lines.linewidth": 1.5,
+    "figure.titleweight": "normal",
+    "lines.markersize": 8,
+    "figure.titlesize": 12 * font_scale,
+    "axes.titlesize": 12 * font_scale,
+    "axes.labelsize": 12 * font_scale,
+    "font.size": 12 * font_scale,
+    "axes.titlesize": 12 * font_scale,
+    "axes.labelsize": 12* font_scale,
+    "axes.labelweight": "normal",
+    "axes.titleweight": "normal",
+    "legend.fontsize": 12 * font_scale,
+    "legend.title_fontsize": 12 * font_scale,
+    "xtick.labelsize": 12 * font_scale,
+    "ytick.labelsize": 12 * font_scale,
+    "text.usetex": True,
+    "text.latex.preamble": r"\usepackage{amsmath, amssymb, cmbright}",
+    "axes.unicode_minus": True,
+    #"font.family": "Helvetica",
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "legend.frameon": False,
+    "legend.loc": "upper center",
+    #"figure.constrained_layout.use" : True,
+    }
+
+mpl.rcParams.update(rc)
 
 
 def render_video(
@@ -45,10 +75,7 @@ def render_video(
         for frame in framestack:
             frames.append(frame)
 
-    orig_backend = mlp.get_backend()
-    mlp.use("Agg")  # Switch to headless 'Agg' to inhibit figure rendering.
     fig, ax = plt.subplots(1, 1, figsize=(width / dpi, height / dpi), dpi=dpi)
-    mlp.use(orig_backend)  # Switch back to the original backend.
     ax.set_axis_off()
     ax.set_aspect("equal")
     ax.set_position([0, 0, 1, 1])
