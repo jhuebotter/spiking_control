@@ -57,7 +57,7 @@ def latex_available() -> bool:
 if latex_available():
     mpl.rcParams.update({
         "text.usetex": True,
-        "text.latex.preamble": r"\usepackage{amsmath, amssymb, cmbright}",
+        "text.latex.preamble": r"\usepackage{amsmath, amssymb}" #, cmbright}",
     })
 else:
     mpl.rcParams.update({
