@@ -110,12 +110,19 @@ def main(cfg: DictConfig) -> None:
         for model in agent.models:
             wandb.watch(model)
 
+    print("### run agent ###")
     agent.run(cfg.learning.total_steps)
 
     # finish the run
     if cfg.logging.wandb.use:
+        print("### finish wandb run ###")
         wandb.finish()
+        print("wandb run finished!")
+    
+    print("### close the environment ###")
     env.close()
+    
+    print("script finished!")
 
 
 if __name__ == "__main__":
