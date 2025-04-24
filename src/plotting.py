@@ -16,6 +16,7 @@ from .utils import FrameStack
 from .eval_helpers import make_predictions
 from .memory import Episode
 from celluloid import Camera
+import shutil
 
 font_scale = 1.0
 
@@ -35,18 +36,33 @@ rc = {
     "legend.title_fontsize": 12 * font_scale,
     "xtick.labelsize": 12 * font_scale,
     "ytick.labelsize": 12 * font_scale,
-    "text.usetex": True,
-    "text.latex.preamble": r"\usepackage{amsmath, amssymb, cmbright}",
+    #"text.usetex": True,
+    #"text.latex.preamble": r"\usepackage{amsmath, amssymb, cmbright}",
     "axes.unicode_minus": True,
-    # "font.family": "Helvetica",
     "figure.dpi": 150,
     "savefig.dpi": 150,
     "legend.frameon": False,
     "legend.loc": "upper center",
-    # "figure.constrained_layout.use" : True,
 }
 
 mpl.rcParams.update(rc)
+
+def latex_available() -> bool:
+    # Check for the bare minimum: a LaTeX engine and a DVI→PNG (or PS) converter
+    tex = shutil.which("latex")     # or "pdflatex"
+    dvipng = shutil.which("dvipng")
+    # you could also check for ghostscript ("gs") if you use ps backend
+    return bool(tex and dvipng)
+
+if latex_available():
+    mpl.rcParams.update({
+        "text.usetex": True,
+        "text.latex.preamble": r"\usepackage{amsmath, amssymb, cmbright}",
+    })
+else:
+    mpl.rcParams.update({
+        "text.usetex": False,
+    })
 
 
 def render_video(
@@ -582,7 +598,7 @@ def plot_trajectory_3d(
     remove_ticks=True,
     remove_labels=True,
     show_colorbar=False,
-    ax_lim: Optional[float] = 1.1,
+    ax_lim: Optional[float] = 0.5,
     show_shadows=True,
     position_marker=True,
     target_marker=True,
@@ -1195,7 +1211,7 @@ def animate_trajectory_3d(
     remove_labels=True,
     show_colorbar=False,
     show_shadows=True,
-    ax_lim: Optional[float] = 1.1,
+    ax_lim: Optional[float] = 0.5,
     base_marker=True,
     target_marker=True,
     position_marker=True,

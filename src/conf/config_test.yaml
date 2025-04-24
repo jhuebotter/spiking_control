@@ -1,5 +1,5 @@
 defaults:
-  - task: reacher
+  - task: franka
   - agent: pred_agent
   - policy: snn_policy
   - prediction: snn_prediction
@@ -17,11 +17,11 @@ model:
   num_layers: 2
   time:
     dt: 0.002
-    tau_mem: 0.01
+    tau_mem: 0.02   # should probably be more like 0.01
     tau_syn: 0.002
   activation:
-    type: gaussianspike
-    beta: 16
+    type: gaussianspike # sigmoidspike  # should be gaussianspike with beta of 16
+    beta: 16 #25
   connection:
     n_dims: null
     latent_bias: false
@@ -30,7 +30,7 @@ model:
     alpha: 0.9
     mu_u: 0.0
     sigma_u: 1.0
-    nu: 125
+    nu: 100  # should probably be 125
     bias_scale: 1.0
     bias_mean: 0.0
     scaling: 1
@@ -99,7 +99,7 @@ plotting:
   prediction_animation_step: 5
 
 learning:
-  batches_per_iteration: 15
+  batches_per_iteration: 25
   total_steps: ${mul:${task.steps_per_iteration}, ${run.iterations}}
 
 hydra:

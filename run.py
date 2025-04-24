@@ -113,9 +113,9 @@ def main(cfg: DictConfig) -> None:
     agent.run(cfg.learning.total_steps)
 
     # finish the run
-    env.close()
     if cfg.logging.wandb.use:
         wandb.finish()
+    env.close()
 
 
 if __name__ == "__main__":

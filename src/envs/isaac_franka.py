@@ -1,6 +1,6 @@
 from isaaclab.app import AppLauncher
 
-app_launcher = AppLauncher({"headless": True, "enable_cameras": True})
+app_launcher = AppLauncher({"headless": False, "enable_cameras": True})
 simulation_app = app_launcher.app
 
 # ! This is just to hunt for isaac warnings that are not being very helpful
