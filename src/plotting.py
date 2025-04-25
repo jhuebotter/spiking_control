@@ -172,20 +172,22 @@ def animate_prediction(
     fps: int = 30,
     save: Optional[Union[Path, str]] = "",
 ) -> object:
-    """animate predictions and save to disk
-    Args:
-        predictions: array of shape [T, unroll, dim]
-        next_states: array of shape [T, dim]
-        labels: list of labels for each dimension
-        warmup: number of steps to warmup the model
-        fps: frames per second
-        dpi: dots per inch
-        save: path to save the video to
+    """ Animate predictions and save to disk """
 
-    Returns:
-        animation object
-    """
+    # Check for NaNs in predictions and log their indices
+    if np.isnan(predictions).any():
+        print("NaN values found in predictions at the following indices:")
+        nan_indices = np.where(np.isnan(predictions))
+        print(nan_indices)  # Print indices where NaNs are located
+        
+        # Optionally: Print the values of predictions at those NaN positions for further inspection
+        for idx in zip(*nan_indices):
+            print(f"NaN found at index {idx}: {predictions[idx]}")
 
+    # Replace NaNs with zeros
+    predictions = np.nan_to_num(predictions)  # Replace NaNs with zeros
+
+    # Proceed with the rest of the animation code
     T, h, D = predictions.shape
     T = T * step
 
@@ -196,7 +198,7 @@ def animate_prediction(
 
     camera = Camera(fig)
 
-    # make an initial snapshot without prediction
+    # Initial snapshot without prediction
     for d in range(D):
         ax[d].plot([o[d] for o in next_states], c="g", alpha=0.5)
         ax[d].set_ylabel(labels[d])
@@ -204,10 +206,10 @@ def animate_prediction(
     ax[-1].set_xlabel("step")
     plt.tight_layout()
 
-    camera.snap()
+    camera.snap()  # Capture the first frame
     idx = np.arange(0.0, 1.0, 1.0 / (h))
 
-    # animate the prediction
+    # Animate the prediction
     for i, t in enumerate(np.arange(0, T, step)):
         for d in range(D):
             max_ = np.min([h, T - t])
@@ -227,14 +229,15 @@ def animate_prediction(
             ax[d].plot([o[d] for o in next_states], c="g", alpha=0.5)
 
         plt.tight_layout()
-        camera.snap()
+        camera.snap()  # Capture the frame
 
+    # Create the animation
     animation = camera.animate(interval=step * 1000.0 / fps, blit=True)
     plt.close()
 
     if save:
         print(f"Saving animation to {save}")
-        animation.save(save)  # , bitrate=-1)
+        animation.save(save)  # Save the animation if save path is provided
 
     return animation
 
