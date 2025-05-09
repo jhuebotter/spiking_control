@@ -7,6 +7,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 import string
 import random
+from typing import Union, Sequence, List, Any
 
 
 @dataclass
@@ -155,47 +156,84 @@ def set_seed(seed: int = 0) -> None:
     torch.backends.cudnn.benchmark = False
 
 
+
 def make_optimizer(
-    model: torch.nn.Module, config: dict, verbose: bool = True
-) -> torch.optim.Optimizer:
-    """make an optimizer for a model.
+    model: torch.nn.Module,
+    config: Dict[str, Any],
+    verbose: bool = True
+) -> Optimizer:
+    """
+    Create an optimizer for a model, supporting per-group learning rates via a single 'lr'
+    entry in the config, and passing any additional optimizer kwargs equally to each group.
+
+    Config schema:
+        config["type"]  (str): "adam", "sgd", "smorms3", or "soap"
+        config["params"] (dict):
+            "lr": Union[float, Sequence[float]]
+            ... any other optimizer keyword-arguments (e.g. weight_decay, betas, momentum)
+
+    If 'lr' is a float, that value is used for every parameter group.
+    If 'lr' is a list/sequence of floats, its length must match the number of parameter groups
+    (here: weights vs taus), and each entry is applied to the corresponding group.
+
     Args:
-        model (torch.nn.Module): model to optimize
-        config (dict): configuration file
+        model: the torch.nn.Module whose parameters will be optimized.
+        config: dictionary containing optimizer type and 'params' with "lr" and other kwargs.
+        verbose: if True, prints the constructed optimizer.
 
     Returns:
-        torch.optim.Optimizer: optimizer object
+        An Optimizer with two parameter groups:
+            1) all parameters whose name does *not* contain "tau"
+            2) all parameters whose name *does* contain "tau"
     """
-
-    # get the optimizer class
-    optim = config["type"].lower()
-    if optim == "adam":
-        Opt = torch.optim.Adam
-    elif optim == "sgd":
-        Opt = torch.optim.SGD
-    elif optim == "smorms3":
+    # select optimizer class
+    opt_type = config["type"].lower()
+    if opt_type == "adam":
+        OptCls = torch.optim.Adam
+    elif opt_type == "sgd":
+        OptCls = torch.optim.SGD
+    elif opt_type == "smorms3":
         from control_stork.optimizers import SMORMS3
-        Opt = SMORMS3
-    elif optim == "soap":
+        OptCls = SMORMS3
+    elif opt_type == "soap":
         from control_stork.optimizers import SOAP
-        Opt = SOAP
+        OptCls = SOAP
     else:
-        raise NotImplementedError(f"The optimizer {optim} is not implemented")
+        raise NotImplementedError(f"Optimizer '{opt_type}' is not implemented")
 
-    # make the optimizer
-    if isinstance(model, torch.nn.Module):
-        o = Opt(model.parameters(), **config["params"])
-    elif isinstance(model, list):
-        o = Opt([l.parameters() for l in model], **config["params"])
-    else:
-        raise ValueError(
-            "model must be a torch.nn.Module or a list of torch.nn.Modules"
-        )
+    # parse config["params"]
+    params_cfg = config["params"]
+    assert "lr" in params_cfg, "config['params'] must include an 'lr' entry"
+    assert "tau_lr" in params_cfg, "config['params'] must include a 'tau_lr' entry"
+    # extract other optimizer kwargs (excluding 'lr')
+    other_kwargs = {
+        k: v for k, v in params_cfg.items() if k not in ["lr", "tau_lr"]
+    }
+
+    # split model parameters
+    weight_params: List[torch.nn.Parameter] = []
+    tau_params:    List[torch.nn.Parameter] = []
+    for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        if "tau" in name:
+            tau_params.append(p)
+        elif "scale" in name:
+            tau_params.append(p) # we treat scale as tau for faster training
+        else:
+            weight_params.append(p)
+
+    # construct optimizer with per-group lrs and shared kwargs
+    group_args = [
+        {"params": weight_params, "lr": params_cfg["lr"], **other_kwargs},
+        {"params": tau_params, "lr": params_cfg["tau_lr"], **other_kwargs},
+    ]
+    optimizer = OptCls(group_args)
 
     if verbose:
-        print(f"Using optimizer: {o}")
+        print(f"Using optimizer: {optimizer}")
 
-    return o
+    return optimizer
 
 
 def save_checkpoint(
@@ -269,36 +307,59 @@ def load_weights_from_disk(
     return model, optim
 
 
+
 class BaseScheduler:
     """
     Base scheduler class.
 
     Provides a default interface with reset, step, and get_value methods.
     The default get_value simply returns the start value.
+
+    Args:
+        start: float, 0-dim Tensor, or sequence for initial scheduled value(s).
+        end:   float, 0-dim Tensor, or sequence for final scheduled value(s).
+        warmup_steps: number of initial steps to hold at `start` before scheduling.
     """
 
-    def __init__(self, start: float, end: float, warmup_steps: int = 0):
-        self.start = start
-        self.end = end
+    def __init__(
+        self,
+        start: Union[float, Sequence[float], Tensor],
+        end:   Union[float, Sequence[float], Tensor],
+        warmup_steps: int = 0,
+    ):
+        self.start = self._to_tensor_or_float(start)
+        self.end   = self._to_tensor_or_float(end)
         self.warmup_steps = warmup_steps
         self.current_step = 0
 
-    def reset(self):
-        """Reset the scheduler to its initial state."""
+    @staticmethod
+    def _to_tensor_or_float(
+        x: Union[float, Sequence[float], Tensor]
+    ) -> Union[float, Tensor]:
+        if isinstance(x, Tensor):
+            return x
+        if isinstance(x, Sequence) and not isinstance(x, (str, bytes)):
+            return torch.tensor(x)
+        if isinstance(x, (int, float)):
+            return x
+        raise TypeError(f"Unsupported scheduler parameter type: {type(x)}")
+
+    def reset(self) -> None:
+        """Reset the scheduler to step zero."""
         self.set_step(0)
 
-    def set_step(self, step: int):
-        """Set the current step to the given value."""
-        assert step >= 0, "Step must be a non-negative integer."
+    def set_step(self, step: int) -> None:
+        """Set the current step to the given non-negative integer."""
+        assert step >= 0, "Step must be non-negative."
         self.current_step = step
 
-    def step(self):
+    def step(self) -> Union[float, Tensor]:
         """Advance one step and return the new scheduled value."""
         self.current_step += 1
         return self.get_value()
 
-    def get_value(self):
-        """Return the current scheduled value. Default is the start value."""
+    def get_value(self) -> Union[float, Tensor]:
+        """Return the current scheduled value. Default: returns start."""
         return self.start
 
 
@@ -306,90 +367,120 @@ class LinearScheduler(BaseScheduler):
     """
     Linearly interpolates from start to end after an optional warmup period.
 
-    For t < warmup_steps, get_value() returns start.
-    For t >= warmup_steps:
-      Let effective_step = t - warmup_steps.
-      If effective_step >= total_steps, returns end.
-      Otherwise returns:
-          start + (end - start) * (effective_step / total_steps)
+    For t < warmup_steps: returns start.
+    For warmup_steps <= t < warmup_steps + decay_steps:
+        start + (end - start) * ((t - warmup_steps) / decay_steps)
+    For t >= warmup_steps + decay_steps: returns end.
 
     Args:
-        total_steps (int): Number of steps over which to interpolate after warmup.
-                           (At effective_step == total_steps, the scheduler returns end.)
+        start: float, 0-dim Tensor, or sequence for initial value(s).
+        end:   float, 0-dim Tensor, or sequence for final value(s).
+        warmup_steps: number of steps to hold at `start`.
+        decay_steps:  number of steps to move from start to end after warmup.
     """
 
     def __init__(
         self,
-        start: float = 1.0,
-        end: float = 0.0,
+        start: Union[float, Sequence[float], Tensor] = 1.0,
+        end:   Union[float, Sequence[float], Tensor] = 0.0,
         warmup_steps: int = 0,
         decay_steps: int = 100,
-    ):
+    ): 
         super().__init__(start, end, warmup_steps)
         self.decay_steps = decay_steps
 
-    def get_value(self):
+    def get_value(self) -> Union[float, Tensor]:
         if self.current_step < self.warmup_steps:
             return self.start
-        effective_step = self.current_step - self.warmup_steps
-        if effective_step >= self.decay_steps:
+        t = self.current_step - self.warmup_steps
+        if t >= self.decay_steps:
             return self.end
-        return self.start + (self.end - self.start) * (
-            effective_step / self.decay_steps
-        )
+        fraction = t / self.decay_steps
+        return self.start + (self.end - self.start) * fraction
 
 
 class ExponentialScheduler(BaseScheduler):
     """
     Exponential scheduler that supports both decay and increase, with an optional warmup period.
+    Accepts floats, zero-dim Tensors, or sequences for start, end, and gamma.
 
-    For t < warmup_steps, get_value() returns start.
+    For t < warmup_steps: returns start.
     For t >= warmup_steps:
       If start >= end (decay):
-          v(t) = end + (start - end) * gamma^(t - warmup_steps)
+          end + (start - end) * gamma^(t - warmup_steps)
       If start < end (increase):
-          v(t) = start + (end - start) * (1 - gamma^(t - warmup_steps))
-
-    This behavior is identical to your current implementation.
+          start + (end - start) * (1 - gamma^(t - warmup_steps))
 
     Args:
-        gamma (float): Multiplicative factor (should be between 0 and 1).
+        start: float, 0-dim Tensor, or sequence for initial value(s).
+        end:   float, 0-dim Tensor, or sequence for final value(s).
+        gamma: float, 0-dim Tensor, or sequence controlling rate (0 < gamma < 1).
+        warmup_steps: number of steps to hold at `start`.
     """
 
     def __init__(
         self,
-        start: float = 1.0,
-        end: float = 0.0,
-        gamma: float = 0.97,
+        start: Union[float, Sequence[float], Tensor] = 1.0,
+        end:   Union[float, Sequence[float], Tensor] = 0.0,
+        gamma: Union[float, Sequence[float], Tensor] = 0.97,
         warmup_steps: int = 0,
     ):
         super().__init__(start, end, warmup_steps)
-        self.gamma = gamma
+        self.gamma = self._to_tensor_or_float(gamma)
 
-    def get_value(self):
+    def get_value(self) -> Union[float, Tensor]:
+        # before warmup: flat
         if self.current_step < self.warmup_steps:
             return self.start
-        effective_step = self.current_step - self.warmup_steps
-        if self.start >= self.end:
-            return self.end + (self.start - self.end) * (self.gamma**effective_step)
-        else:
-            return self.start + (self.end - self.start) * (
-                1 - self.gamma**effective_step
-            )
+
+        t = self.current_step - self.warmup_steps
+        # scalar-only fast path
+        if not torch.is_tensor(self.start) and not torch.is_tensor(self.end) and not torch.is_tensor(self.gamma):
+            if self.start >= self.end:
+                return self.end + (self.start - self.end) * (self.gamma ** t)
+            return self.start + (self.end - self.start) * (1 - self.gamma ** t)
+
+        # tensor path: convert floats to match tensor dtype/device
+        device = None
+        dtype = None
+        if torch.is_tensor(self.start):
+            device, dtype = self.start.device, self.start.dtype
+        elif torch.is_tensor(self.end):
+            device, dtype = self.end.device, self.end.dtype
+        elif torch.is_tensor(self.gamma):
+            device, dtype = self.gamma.device, self.gamma.dtype
+
+        start_t = torch.as_tensor(self.start, device=device, dtype=dtype)
+        end_t   = torch.as_tensor(self.end,   device=device, dtype=dtype)
+        gamma_t = torch.as_tensor(self.gamma, device=device, dtype=dtype)
+
+        v_decay    = end_t + (start_t - end_t) * (gamma_t ** t)
+        v_increase = start_t + (end_t - start_t) * (1 - gamma_t ** t)
+        return torch.where(start_t >= end_t, v_decay, v_increase)
 
 
 class StepScheduler(BaseScheduler):
     """
-    Step scheduler that, after an optional warmup period, immediately returns a constant value.
+    Step scheduler that, after an optional warmup period, jumps from start to end.
 
-    For t < warmup_steps, get_value() returns start.
-    For t >= warmup_steps, get_value() returns end.
+    For t < warmup_steps: returns start.
+    For t >= warmup_steps: returns end.
+
+    Args:
+        start: float, 0-dim Tensor, or sequence for initial value(s).
+        end:   float, 0-dim Tensor, or sequence for final value(s).
+        warmup_steps: number of steps to hold at `start`.
     """
 
-    def __init__(self, start: float = 1.0, end: float = 0.0, warmup_steps: int = 0):
+    def __init__(
+        self,
+        start: Union[float, Sequence[float], Tensor] = 1.0,
+        end:   Union[float, Sequence[float], Tensor] = 0.0,
+        warmup_steps: int = 0,
+    ):
         super().__init__(start, end, warmup_steps)
 
-    def get_value(self):
+    def get_value(self) -> Union[float, Tensor]:
         if self.current_step < self.warmup_steps:
             return self.start
         return self.end
@@ -397,50 +488,112 @@ class StepScheduler(BaseScheduler):
 
 class LRSchedulerWrapper:
     """
-    A learning rate scheduler wrapper that updates the optimizer's learning rates using a custom scheduler.
+    A learning rate scheduler wrapper that updates the optimizer's learning rates
+    using a custom scheduler.
 
     This wrapper takes an optimizer and a scheduler instance (a subclass of BaseScheduler).
-    On each step, it calls the scheduler to obtain the new learning rate(s) and updates each parameter
-    group in the optimizer accordingly. The scheduler's get_value() method is still available for logging.
+    On each step it advances the scheduler, reads out one or more new learning rates,
+    and writes them into each of the optimizer's parameter groups. It also exposes
+    get_value() for logging the current learning rate(s).
 
-    It supports both scalar and list-like inputs for start, end, and decay parameters.
+    The scheduler may return a single float-like value (int, float, or 0-D Tensor),
+    in which case all parameter-groups get that same LR, or an iterable of values
+    (e.g., a list or 1-D Tensor) whose length must match the number of param groups.
     """
 
-    def __init__(self, optimizer: torch.optim.Optimizer, scheduler: BaseScheduler):
+    def __init__(self, optimizer: Optimizer, scheduler: BaseScheduler) -> None:
         self.optimizer = optimizer
         self.scheduler = scheduler
 
-        # Initialize each parameter group's learning rate based on the scheduler's starting value.
+        # Initialize each parameter group's LR based on scheduler's start value
         initial_lr = self.scheduler.get_value()
-        if isinstance(initial_lr, (int, float)):
-            for group in self.optimizer.param_groups:
-                group["lr"] = initial_lr
+        self._apply_lrs(initial_lr)
+
+    def _apply_lrs(
+        self, lr_values: Union[int, float, Tensor, Sequence[Union[int, float, Tensor]]]
+    ) -> Union[float, List[float]]:
+        """
+        Helper to assign lr_values to each param_group['lr'].
+        Returns a Python float or list of floats for logging.
+        """
+        # Handle torch.Tensor inputs
+        if torch.is_tensor(lr_values):
+            if lr_values.dim() == 0:
+                lr_py = lr_values.item()
+                for pg in self.optimizer.param_groups:
+                    pg["lr"] = lr_py
+                return lr_py
+            else:
+                raw_list = lr_values.tolist()
+        # Handle Python sequences (but not strings)
+        elif isinstance(lr_values, Sequence) and not isinstance(
+            lr_values, (str, bytes)
+        ):
+            raw_list = []
+            for v in lr_values:
+                if torch.is_tensor(v) and v.dim() == 0:
+                    raw_list.append(v.item())
+                else:
+                    raw_list.append(v)
+        # Handle single floats/ints
+        elif isinstance(lr_values, (int, float)):
+            lr_py = lr_values
+            for pg in self.optimizer.param_groups:
+                pg["lr"] = lr_py
+            return lr_py
         else:
-            # Assume iterable: assign each corresponding parameter group.
-            for group, lr in zip(self.optimizer.param_groups, initial_lr):
-                group["lr"] = lr
+            raise TypeError(f"Unsupported lr_values type: {type(lr_values)}")
+
+        # At this point raw_list is a list of Python floats (or ints)
+        num_groups = len(self.optimizer.param_groups)
+        if len(raw_list) != num_groups:
+            raise ValueError(
+                f"Got {len(raw_list)} LR values for {num_groups} parameter groups"
+            )
+        for pg, lr in zip(self.optimizer.param_groups, raw_list):
+            pg["lr"] = lr
+        return raw_list
 
     def step(self, epoch: int = None) -> Union[float, List[float]]:
         """
-        Advance the scheduler one step, update the optimizer's learning rates,
-        and return the new learning rate(s).
+        Advance the scheduler by one step (or to a specific epoch), update
+        the optimizer's learning rates, and return the new LR(s).
+
+        Args:
+            epoch (int, optional): If provided, sets the scheduler to that step
+                via scheduler.set_step(epoch). Otherwise calls scheduler.step().
+
+        Returns:
+            A single float or a list of floats reflecting the new learning rates.
         """
         if epoch is not None:
+            # Some schedulers support setting an absolute step
             self.scheduler.set_step(epoch)
         else:
+            # Default: advance by one
             self.scheduler.step()
 
         new_lr = self.scheduler.get_value()
-        if isinstance(new_lr, (int, float)):
-            for group in self.optimizer.param_groups:
-                group["lr"] = new_lr
-        else:
-            for group, lr in zip(self.optimizer.param_groups, new_lr):
-                group["lr"] = lr
-        return new_lr
+        return self._apply_lrs(new_lr)
 
     def get_value(self) -> Union[float, List[float]]:
         """
-        Return the current learning rate(s) computed by the underlying scheduler.
+        Query the current learning rate(s) from the underlying scheduler,
+        without modifying the optimizer.
+
+        Returns:
+            A single float or a list of floats reflecting the current LR(s).
         """
-        return self.scheduler.get_value()
+        val = self.scheduler.get_value()
+        # Convert any Tensor into a Python float or list
+        if torch.is_tensor(val):
+            if val.dim() == 0:
+                return val.item()
+            return val.tolist()
+        if isinstance(val, Sequence) and not isinstance(val, (str, bytes)):
+            return [v.item() if torch.is_tensor(v) and v.dim() == 0 else v for v in val]
+        if isinstance(val, (int, float)):
+            return val
+        raise TypeError(
+            f"Unsupported return type from scheduler.get_value(): {type(val)}"
+        )

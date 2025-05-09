@@ -4,7 +4,7 @@ from control_stork.nodes import (
     CellGroup,
     InputGroup,
     FastLIFGroup,
-    FastReadoutGroup,
+    ReadoutGroup,
 )
 from control_stork.initializers import (
     Initializer,
@@ -33,7 +33,7 @@ class PolicyNetRSNN(BaseRSNN):
         input_kwargs: dict = {},
         neuron_type: CellGroup = FastLIFGroup,
         neuron_kwargs: dict = {},
-        readout_type: CellGroup = FastReadoutGroup,
+        readout_type: CellGroup = ReadoutGroup,
         readout_kwargs: dict = {},
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},

@@ -22,7 +22,8 @@ optimizer:
   type: ${optimizer.type}
   params:
     lr: ${optimizer.params.lr}
+    tau_lr: ${optimizer.params.tau_lr}
 
 learning:
   params:
-    unroll_steps: 5 # should probably be more like 10
+    unroll_steps: 10 # should probably be more like 10

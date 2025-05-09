@@ -2,13 +2,10 @@ import torch
 from . import PredictionNetRSNN, PredictionNetPRNN, PolicyNetRSNN, PolicyNetPRNN
 from control_stork import activations, initializers
 from control_stork.nodes import (
-    CellGroup,
     InputGroup,
     FastLIFGroup,
     AdaptiveLIFGroup,
-    FastReadoutGroup,
-    DirectReadoutGroup,
-    TimeAverageReadoutGroup,
+    ReadoutGroup,
 )
 from control_stork.encoders import (
     EncoderStack,
@@ -224,8 +221,15 @@ def make_snn_objects(config: DictConfig) -> dict:
         if "latent_bias" in params["connection_kwargs"]:
             del params["connection_kwargs"].latent_bias
 
+    # ! TODO ADD THIS WITH THE RIGHT CONFIGURATION
+    # make the tau initializer
+    params["tau_initializer"] = make_tau_initializer(
+        config.params.neuron.get("kwargs", {}),
+        config.params.tau_initializer.get("stds", {})
+    )
+
     # make the initializer
-    params["initializer"] = make_initilizer(
+    params["initializer"] = make_initializer(
         config.params.initializer.get("type", "default"),
         **config.params.initializer.get("kwargs", {}),
     )
@@ -334,7 +338,7 @@ def get_layer_class(type: str = "default") -> Type[torch.nn.Module]:
     elif type == "alif":
         return AdaptiveLIFGroup
     elif type == "readout":
-        return FastReadoutGroup
+        return ReadoutGroup
     else:
         raise NotImplementedError(f"the layer {type} is not implemented")
 
@@ -355,7 +359,29 @@ def get_connection_class(n_dims: Optional[int] = None) -> Connection:
         return BottleneckLinearConnection
 
 
-def make_initilizer(type: str = "default", **kwargs) -> initializers.Initializer:
+def make_tau_initializer(neuron_kwargs: dict = {}, std_kwargs: dict = {}) -> initializers.Initializer:
+    """make a tau initializer
+    Args:
+        kwargs (dict, optional): initializer parameters. Defaults to {}.
+
+    Returns:
+        initializers.Initializer: initializer object class
+    """
+
+    tau_defaults = {}
+    if "tau_mem" in neuron_kwargs:
+        tau_defaults["tau_mem"] = neuron_kwargs["tau_mem"]
+    if "tau_syn" in neuron_kwargs:
+        tau_defaults["tau_syn"] = neuron_kwargs["tau_syn"]
+    if "tau_ada" in neuron_kwargs:
+        tau_defaults["tau_ada"] = neuron_kwargs["tau_ada"]
+
+    tau_init = initializers.TauInitializer(defaults=tau_defaults, stds=std_kwargs)
+
+    return tau_init
+
+
+def make_initializer(type: str = "default", **kwargs) -> initializers.Initializer:
     """make an initializer
     Args:
         type (str, optional): initializer type. Defaults to 'default'.

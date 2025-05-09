@@ -22,6 +22,7 @@ optimizer:
   type: ${optimizer.type}
   params:
     lr: ${optimizer.params.lr}
+    tau_lr: ${optimizer.params.tau_lr}
 
 learning:
   params:

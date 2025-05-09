@@ -19,23 +19,32 @@ model:
         reset: sub
         tau_mem: ${model.time.tau_mem}
         tau_syn: ${model.time.tau_syn}
-        tau_ada: 0.0
-        learn_mem: false
-        learn_syn: false
-        learn_ada: false
-        mem_param: single
-        syn_param: single
-        ada_param: single
+        tau_ada: ${model.time.tau_ada}
+        learn_mem: ${model.time.learn_tau_mem}
+        learn_syn: ${model.time.learn_tau_syn}
+        learn_ada: ${model.time.learn_tau_ada}
+        mem_param: ${model.time.mem_param}
+        syn_param: ${model.time.syn_param}
+        ada_param: ${model.time.ada_param}
     readout:
       type: readout
       kwargs:
-        tau_mem: ${model.time.tau_mem}
-        tau_syn: ${model.time.tau_syn}
+        tau_mem: ${model.time.tau_mem}  # currently needs to be the same as the neuron tau_mem
+        tau_syn: ${model.time.tau_syn}  # currently needs to be the same as the neuron tau_syn
+        learn_mem: ${model.time.learn_tau_mem}
+        learn_syn: ${model.time.learn_tau_syn}
+        mem_param: ${model.time.mem_param}
+        syn_param: ${model.time.syn_param}
     connection:
       kwargs:
         bias: true
         n_dims: ${model.connection.n_dims}
         latent_bias: ${model.connection.latent_bias}
+    tau_initializer:
+      stds:
+        tau_mem: ${model.time.tau_mem_std}
+        tau_syn: ${model.time.tau_syn_std}
+        tau_ada: ${model.time.tau_ada_std}
     initializer:
       type: normal
       kwargs:

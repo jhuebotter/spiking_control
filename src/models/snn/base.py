@@ -6,23 +6,27 @@ from control_stork.nodes import (
     CellGroup,
     InputGroup,
     FastLIFGroup,
-    FastReadoutGroup,
-    DirectReadoutGroup,
-    TimeAverageReadoutGroup,
+    ReadoutGroup,
 )
 from control_stork.connections import Connection
 from control_stork.initializers import (
     Initializer,
     FluctuationDrivenNormalInitializer,
-    AverageInitializer,
+    TauInitializer,
 )
 from control_stork.monitors import (
     PlotStateMonitor,
     PopulationSpikeCountMonitor,
     ActiveNeuronMonitor,
     PropertyMonitor,
+    SnapshotStatsMonitor,
+    PlotPropertyMonitor,
 )
-from control_stork.plotting import plot_spikes, plot_traces
+from control_stork.plotting import (
+    plot_spikes,
+    plot_traces,
+    plot_histogram,
+)
 from control_stork.activations import SigmoidSpike
 from control_stork.layers import Layer
 from src.extratypes import *
@@ -46,13 +50,17 @@ class BaseRSNN(nn.Module):
         input_kwargs: dict = {},
         neuron_type: CellGroup = FastLIFGroup,
         neuron_kwargs: dict = {},
-        readout_type: CellGroup = FastReadoutGroup,
+        readout_type: CellGroup = ReadoutGroup,
         readout_kwargs: dict = {},
         connection_type: Connection = Connection,
         connection_kwargs: dict = {},
         activation: torch.nn.Module = SigmoidSpike,
         initializer: Initializer = FluctuationDrivenNormalInitializer(
             mu_u=0.0, nu=200, sigma_u=1.0, time_step=1e-3
+        ),
+        tau_initializer: TauInitializer = TauInitializer(
+            defaults={"tau_mem": 0.01, "tau_syn": 0.002, "tau_ada": 0.0},
+            stds={"tau_mem": 0.0, "tau_syn": 0.0, "tau_ada": 0.0},
         ),
         regularizers: list = [],
         w_regularizers: list = [],
@@ -74,7 +82,7 @@ class BaseRSNN(nn.Module):
         self.num_ff_layers = num_ff_layers
         self.num_layers = num_rec_layers + num_ff_layers
         if isinstance(hidden_dim, int):
-            #hidden_dim = [hidden_dim] * (self.num_layers - 1) + [hidden_dim // 2]
+            # hidden_dim = [hidden_dim] * (self.num_layers - 1) + [hidden_dim // 2]
             hidden_dim = [hidden_dim] * self.num_layers
         assert len(hidden_dim) == self.num_layers
         self.hidden_dim = hidden_dim
@@ -89,6 +97,7 @@ class BaseRSNN(nn.Module):
         self.connection_kwargs = connection_kwargs
         self.activation = activation
         self.initializer = initializer
+        self.tau_initializer = tau_initializer
         self.regularizers = regularizers
         self.w_regularizers = w_regularizers
         assert out_style.lower() in ["mean", "last"]
@@ -110,16 +119,14 @@ class BaseRSNN(nn.Module):
         self.model = RecurrentSpikingModel(device=device)
         self.input_group = prev = self.model.add_group(
             self.input_type(
-                self.input_dim, 
-                name=f"{self.name} Input Group", 
-                **self.input_kwargs
+                self.input_dim, name=f"{self.name} Input Group", **self.input_kwargs
             )
         )
         self.layers = []
         first = True
         for i in range(num_rec_layers):
             new = Layer(
-                name=f"{self.name} Recurrent LIF Cell Group {i+1}",
+                name=f"{self.name} rec. LIF {i+1}",
                 model=self.model,
                 size=self.hidden_dim[len(self.layers)],
                 input_group=prev,
@@ -140,7 +147,7 @@ class BaseRSNN(nn.Module):
                     new.output_group,
                     "out",
                     plot_fn=plot_spikes,
-                    title=f"{self.name} Recurrent LIF Cell Group {i+1}",
+                    title=f"{new.output_group.name}",
                     dim=(2, 4),
                 )
             )
@@ -149,7 +156,7 @@ class BaseRSNN(nn.Module):
                     new.output_group,
                     "mem",
                     plot_fn=plot_traces,
-                    title=f"{self.name} Recurrent LIF Cell Group {i+1}",
+                    title=f"{new.output_group.name}",
                     dim=(2, 4),
                 )
             )
@@ -158,22 +165,42 @@ class BaseRSNN(nn.Module):
             )
             self.model.add_monitor(ActiveNeuronMonitor(new.output_group))
             self.model.add_monitor(
-                PropertyMonitor(
+                SnapshotStatsMonitor(
                     new.output_group,
                     "tau_mem",
                 )
             )
             self.model.add_monitor(
-                PropertyMonitor(
+                SnapshotStatsMonitor(
                     new.output_group,
                     "tau_syn",
+                )
+            )
+
+            self.model.add_monitor(
+                PlotPropertyMonitor(
+                    new.output_group,
+                    "tau_mem",
+                    plot_fn=plot_histogram,
+                    title=f"{new.output_group.name}",
+                    xlabel="Membrane time constant [s]",
+                )
+            )
+
+            self.model.add_monitor(
+                PlotPropertyMonitor(
+                    new.output_group,
+                    "tau_syn",
+                    plot_fn=plot_histogram,
+                    title=f"{new.output_group.name}",
+                    xlabel="Synaptic time constant [s]",
                 )
             )
 
             prev = new.output_group
         for i in range(num_ff_layers):
             new = Layer(
-                name=f"{self.name} FF LIF Cell Group {i+1}",
+                name=f"{self.name} ff. LIF {i+1}",
                 model=self.model,
                 size=hidden_dim[len(self.layers)],
                 input_group=prev,
@@ -192,7 +219,7 @@ class BaseRSNN(nn.Module):
                     new.output_group,
                     "out",
                     plot_fn=plot_spikes,
-                    title=f"{self.name} FF LIF Cell Group {i+1}",
+                    title=f"{new.output_group.name}",
                     dim=(2, 4),
                 )
             )
@@ -201,7 +228,7 @@ class BaseRSNN(nn.Module):
                     new.output_group,
                     "mem",
                     plot_fn=plot_traces,
-                    title=f"{self.name} FF LIF Cell Group {i+1}",
+                    title=f"{new.output_group.name}",
                     dim=(2, 4),
                 )
             )
@@ -210,23 +237,43 @@ class BaseRSNN(nn.Module):
             )
             self.model.add_monitor(ActiveNeuronMonitor(new.output_group))
             self.model.add_monitor(
-                PropertyMonitor(
+                SnapshotStatsMonitor(
                     new.output_group,
                     "tau_mem",
                 )
             )
             self.model.add_monitor(
-                PropertyMonitor(
+                SnapshotStatsMonitor(
                     new.output_group,
                     "tau_syn",
+                )
+            )
+
+            self.model.add_monitor(
+                PlotPropertyMonitor(
+                    new.output_group,
+                    "tau_mem",
+                    plot_fn=plot_histogram,
+                    title=f"{new.output_group.name}",
+                    xlabel="Membrane time constant [s]",
+                )
+            )
+
+            self.model.add_monitor(
+                PlotPropertyMonitor(
+                    new.output_group,
+                    "tau_syn",
+                    plot_fn=plot_histogram,
+                    title=f"{new.output_group.name}",
+                    xlabel="Synaptic time constant [s]",
                 )
             )
 
             prev = new.output_group
 
         # make the readout
-        #readout_connection_kwargs = self.connection_kwargs.copy()
-        readout_connection_kwargs = {"bias" : False}
+        # readout_connection_kwargs = self.connection_kwargs.copy()
+        readout_connection_kwargs = {"bias": False}
         new = Layer(
             name=f"{self.name} Readout Layer",
             model=self.model,
@@ -234,7 +281,7 @@ class BaseRSNN(nn.Module):
             input_group=prev,
             recurrent=False,
             w_regs=self.w_regularizers,
-            #connection_class=self.connection_type, #! I do not want a bottleneck here
+            # connection_class=self.connection_type, #! I do not want a bottleneck here
             neuron_class=self.readout_type,
             neuron_kwargs=self.readout_kwargs,
             connection_kwargs=readout_connection_kwargs,
@@ -247,7 +294,7 @@ class BaseRSNN(nn.Module):
                 self.output_group,
                 "mem",
                 plot_fn=plot_traces,
-                title=f"{self.name} Readout Layer",
+                title=f"{new.output_group.name}",
                 dim=(2, 4),
             )
         )
@@ -256,14 +303,45 @@ class BaseRSNN(nn.Module):
                 new.output_group,
                 "out",
                 plot_fn=plot_traces,
-                title=f"{self.name} Readout Layer",
+                title=f"{new.output_group.name}",
                 dim=(2, 4),
             )
         )
 
+        self.model.add_monitor(
+            SnapshotStatsMonitor(
+                new.output_group,
+                "tau_mem",
+            )
+        )
+        self.model.add_monitor(
+            SnapshotStatsMonitor(
+                new.output_group,
+                "tau_syn",
+            )
+        )
+
+        self.model.add_monitor(
+            PlotPropertyMonitor(
+                new.output_group,
+                "tau_mem",
+                plot_fn=plot_histogram,
+                title=f"{new.output_group.name}",
+                xlabel="Membrane time constant [s]",
+            )
+        )
+
+        self.model.add_monitor(
+            PlotPropertyMonitor(
+                new.output_group,
+                "tau_syn",
+                plot_fn=plot_histogram,
+                title=f"{new.output_group.name}",
+                xlabel="Synaptic time constant [s]",
+            )
+        )
 
         # configure the model
-        # TODO: Rework how optimizers work!
         self.model.configure(
             self.input_group,
             self.output_group,
@@ -271,8 +349,8 @@ class BaseRSNN(nn.Module):
         )
 
         for layer in self.layers:
+            self.tau_initializer.initialize(layer)
             self.initializer.initialize(layer)
-        #con.init_parameters(readout_initializer)
 
         self.model.add_monitor(
             PropertyMonitor(
@@ -295,8 +373,9 @@ class BaseRSNN(nn.Module):
             "PopulationSpikeCountMonitor",
             "ActiveNeuronMonitor",
             "PropertyMonitor",
+            "SnapshotStatsMonitor",
         ]
-        self.plot_monitors = ["PlotStateMonitor"]
+        self.plot_monitors = ["PlotStateMonitor", "PlotPropertyMonitor"]
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer) -> None:
         self.optimizer = optimizer
