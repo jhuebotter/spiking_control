@@ -109,7 +109,10 @@ class PredictiveControlAgent(BaseAgent):
 
         # make a learning rate scheduler
         prediction_model_lr_scheduler = ExponentialScheduler(
-            start=self.prediction_config.optimizer.params.get("lr", 1e-3),
+            start=[
+                self.prediction_config.optimizer.params.get("lr", 1e-3),
+                self.prediction_config.optimizer.params.get("tau_lr", 1e-3)
+            ],
             end=self.run_config.get("lr_end", 0),
             gamma=self.run_config.get("lr_decay", 1.0),
             warmup_steps=self.run_config.get("lr_warmup_steps", 0),
@@ -119,7 +122,10 @@ class PredictiveControlAgent(BaseAgent):
         )
 
         policy_model_lr_scheduler = ExponentialScheduler(
-            start=self.policy_config.optimizer.params.get("lr", 1e-3),
+            start=[
+                self.policy_config.optimizer.params.get("lr", 1e-3),
+                self.policy_config.optimizer.params.get("tau_lr", 1e-3)
+            ],
             end=self.run_config.get("lr_end", 0),
             gamma=self.run_config.get("lr_decay", 1.0),
             warmup_steps=self.run_config.get("lr_warmup_steps", 0),
