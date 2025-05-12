@@ -156,11 +156,8 @@ def set_seed(seed: int = 0) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-
 def make_optimizer(
-    model: torch.nn.Module,
-    config: Dict[str, Any],
-    verbose: bool = True
+    model: torch.nn.Module, config: Dict[str, Any], verbose: bool = True
 ) -> Optimizer:
     """
     Create an optimizer for a model, supporting per-group learning rates via a single 'lr'
@@ -194,9 +191,11 @@ def make_optimizer(
         OptCls = torch.optim.SGD
     elif opt_type == "smorms3":
         from control_stork.optimizers import SMORMS3
+
         OptCls = SMORMS3
     elif opt_type == "soap":
         from control_stork.optimizers import SOAP
+
         OptCls = SOAP
     else:
         raise NotImplementedError(f"Optimizer '{opt_type}' is not implemented")
@@ -206,20 +205,18 @@ def make_optimizer(
     assert "lr" in params_cfg, "config['params'] must include an 'lr' entry"
     assert "tau_lr" in params_cfg, "config['params'] must include a 'tau_lr' entry"
     # extract other optimizer kwargs (excluding 'lr')
-    other_kwargs = {
-        k: v for k, v in params_cfg.items() if k not in ["lr", "tau_lr"]
-    }
+    other_kwargs = {k: v for k, v in params_cfg.items() if k not in ["lr", "tau_lr"]}
 
     # split model parameters
     weight_params: List[torch.nn.Parameter] = []
-    tau_params:    List[torch.nn.Parameter] = []
+    tau_params: List[torch.nn.Parameter] = []
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
         if "tau" in name:
             tau_params.append(p)
-        elif "scale" in name:
-            tau_params.append(p) # we treat scale as tau for faster training
+        # elif "scale" in name:
+        #    tau_params.append(p) # we treat scale as tau for faster training
         else:
             weight_params.append(p)
 
@@ -307,7 +304,6 @@ def load_weights_from_disk(
     return model, optim
 
 
-
 class BaseScheduler:
     """
     Base scheduler class.
@@ -324,17 +320,17 @@ class BaseScheduler:
     def __init__(
         self,
         start: Union[float, Sequence[float], Tensor],
-        end:   Union[float, Sequence[float], Tensor],
+        end: Union[float, Sequence[float], Tensor],
         warmup_steps: int = 0,
     ):
         self.start = self._to_tensor_or_float(start)
-        self.end   = self._to_tensor_or_float(end)
+        self.end = self._to_tensor_or_float(end)
         self.warmup_steps = warmup_steps
         self.current_step = 0
 
     @staticmethod
     def _to_tensor_or_float(
-        x: Union[float, Sequence[float], Tensor]
+        x: Union[float, Sequence[float], Tensor],
     ) -> Union[float, Tensor]:
         if isinstance(x, Tensor):
             return x
@@ -382,10 +378,10 @@ class LinearScheduler(BaseScheduler):
     def __init__(
         self,
         start: Union[float, Sequence[float], Tensor] = 1.0,
-        end:   Union[float, Sequence[float], Tensor] = 0.0,
+        end: Union[float, Sequence[float], Tensor] = 0.0,
         warmup_steps: int = 0,
         decay_steps: int = 100,
-    ): 
+    ):
         super().__init__(start, end, warmup_steps)
         self.decay_steps = decay_steps
 
@@ -421,7 +417,7 @@ class ExponentialScheduler(BaseScheduler):
     def __init__(
         self,
         start: Union[float, Sequence[float], Tensor] = 1.0,
-        end:   Union[float, Sequence[float], Tensor] = 0.0,
+        end: Union[float, Sequence[float], Tensor] = 0.0,
         gamma: Union[float, Sequence[float], Tensor] = 0.97,
         warmup_steps: int = 0,
     ):
@@ -435,10 +431,14 @@ class ExponentialScheduler(BaseScheduler):
 
         t = self.current_step - self.warmup_steps
         # scalar-only fast path
-        if not torch.is_tensor(self.start) and not torch.is_tensor(self.end) and not torch.is_tensor(self.gamma):
+        if (
+            not torch.is_tensor(self.start)
+            and not torch.is_tensor(self.end)
+            and not torch.is_tensor(self.gamma)
+        ):
             if self.start >= self.end:
-                return self.end + (self.start - self.end) * (self.gamma ** t)
-            return self.start + (self.end - self.start) * (1 - self.gamma ** t)
+                return self.end + (self.start - self.end) * (self.gamma**t)
+            return self.start + (self.end - self.start) * (1 - self.gamma**t)
 
         # tensor path: convert floats to match tensor dtype/device
         device = None
@@ -451,11 +451,11 @@ class ExponentialScheduler(BaseScheduler):
             device, dtype = self.gamma.device, self.gamma.dtype
 
         start_t = torch.as_tensor(self.start, device=device, dtype=dtype)
-        end_t   = torch.as_tensor(self.end,   device=device, dtype=dtype)
+        end_t = torch.as_tensor(self.end, device=device, dtype=dtype)
         gamma_t = torch.as_tensor(self.gamma, device=device, dtype=dtype)
 
-        v_decay    = end_t + (start_t - end_t) * (gamma_t ** t)
-        v_increase = start_t + (end_t - start_t) * (1 - gamma_t ** t)
+        v_decay = end_t + (start_t - end_t) * (gamma_t**t)
+        v_increase = start_t + (end_t - start_t) * (1 - gamma_t**t)
         return torch.where(start_t >= end_t, v_decay, v_increase)
 
 
@@ -475,7 +475,7 @@ class StepScheduler(BaseScheduler):
     def __init__(
         self,
         start: Union[float, Sequence[float], Tensor] = 1.0,
-        end:   Union[float, Sequence[float], Tensor] = 0.0,
+        end: Union[float, Sequence[float], Tensor] = 0.0,
         warmup_steps: int = 0,
     ):
         super().__init__(start, end, warmup_steps)
