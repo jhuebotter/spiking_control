@@ -899,8 +899,8 @@ def plot_trajectory_3d(
             shadow_xy_target = shadow_xz_target = shadow_yz_target = None
         if position_marker:
             shadow_xy_final = ax_traj.scatter(
-                position[0, 0],
-                position[0, 1],
+                position[-1, 0],
+                position[-1, 1],
                 z_low,
                 facecolors="none",
                 edgecolors=shadow_edge,
@@ -909,9 +909,9 @@ def plot_trajectory_3d(
                 depthshade=False,
             )
             shadow_xz_final = ax_traj.scatter(
-                position[0, 0],
+                position[-1, 0],
                 y_high,
-                position[0, 2],
+                position[-1, 2],
                 facecolors="none",
                 edgecolors=shadow_edge,
                 s=50,
@@ -920,8 +920,8 @@ def plot_trajectory_3d(
             )
             shadow_yz_final = ax_traj.scatter(
                 x_low,
-                position[0, 1],
-                position[0, 2],
+                position[-1, 1],
+                position[-1, 2],
                 facecolors="none",
                 edgecolors=shadow_edge,
                 s=50,
