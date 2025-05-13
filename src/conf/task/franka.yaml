@@ -14,4 +14,4 @@ params:
   include_sin_cos: false
   render_interval: 1
   set_joint_velocity_target: false
-  gravity: false  # ! DOES NOTHING AND IS JUST FOR THE RESULT FILE
+  gravity: true  # ! DOES NOTHING AND IS JUST FOR THE RESULT FILE

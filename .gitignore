@@ -59,3 +59,5 @@ docs/_build/
 results/
 outputs/
 wandb/
+notebooks/plots/
+*.csv

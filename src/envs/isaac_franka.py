@@ -158,7 +158,7 @@ class FrankaReachCustomEnvCfg(DirectRLEnvCfg):
     joint_damping = 80.0
     joint_friction = 0.0
     joint_armature = 0.0
-    gravity = False
+    gravity = True
     set_joint_velocity_target = False
 
     observation_space: spaces.Box = spaces.Box(
