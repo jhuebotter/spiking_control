@@ -26,6 +26,8 @@ model:
         mem_param: ${model.time.mem_param}
         syn_param: ${model.time.syn_param}
         ada_param: ${model.time.ada_param}
+        threshold_decay: ${model.time.threshold_decay}
+        threshold_xi: ${model.time.threshold_xi}
     readout:
       type: readout
       kwargs:
