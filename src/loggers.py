@@ -19,28 +19,73 @@ logging.getLogger("PIL").setLevel(logging.WARNING)
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 
-def cleanup(dct: dict, level: int = 0):
-    """recursively close all figures and animations in a dictionary
-    Args:
-        dict (dict): dictionary
-        level (int, optional): level. Defaults to 0.
-    Returns:
-        None
+def cleanup(obj, level: int = 0, _seen=None):
     """
-    # properly close all figures and animations in the dictionary
-    for key, val in dct.items():
-        if isinstance(val, plt.Figure):
-            plt.close(val)
-        elif isinstance(val, dict):
-            cleanup(val, level=level + 1)
-        # delete all references to the dictionary and its contents
-        del val
-    dct.clear()
-    # close all figures and animations
-    plt.close("all")
-    # call the garbage collector
+    Recursively close and remove references to any matplotlib Figures or Animations
+    found in `obj`.  If `obj` is a dict, list/tuple/set or has a __dict__, we descend into it.
+    On the outermost call (level==0), we also delete `obj` itself and run gc.collect().
+    """
+
+    if _seen is None:
+        _seen = set()
+    oid = id(obj)
+    if oid in _seen:
+        return
+    _seen.add(oid)
+
+    # 1) dicts
+    if isinstance(obj, dict):
+        for key in list(obj.keys()):
+            cleanup(obj[key], level + 1, _seen)
+            obj.pop(key, None)
+        return
+
+    # 2) lists
+    if isinstance(obj, list):
+        while obj:
+            cleanup(obj.pop(), level + 1, _seen)
+        return
+
+    # 3) tuples or sets
+    if isinstance(obj, tuple) or isinstance(obj, set):
+        for item in list(obj):
+            cleanup(item, level + 1, _seen)
+        return
+
+    # 4) matplotlib Figures
+    if isinstance(obj, plt.Figure):
+        plt.close(obj)
+        return
+
+    # 5) matplotlib Animations
+    if isinstance(obj, animation.Animation):
+        # stop any running timer
+        try:
+            obj.event_source.stop()
+        except Exception:
+            pass
+        # attempt to close its figure
+        try:
+            plt.close(obj._fig)
+        except Exception:
+            pass
+        return
+
+    # 6) any object with attributes
+    if hasattr(obj, "__dict__"):
+        for attr, val in list(vars(obj).items()):
+            cleanup(val, level + 1, _seen)
+            try:
+                delattr(obj, attr)
+            except Exception:
+                pass
+
+    # 7) top‐level teardown
     if level == 0:
-        del dct
+        try:
+            del obj
+        except Exception:
+            pass
         gc.collect()
 
 
