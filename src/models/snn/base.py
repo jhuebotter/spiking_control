@@ -176,6 +176,12 @@ class BaseRSNN(nn.Module):
                     "tau_syn",
                 )
             )
+            self.model.add_monitor(
+                SnapshotStatsMonitor(
+                    new.output_group,
+                    "tau_ada",
+                )
+            )
 
             self.model.add_monitor(
                 PlotPropertyMonitor(
@@ -194,6 +200,16 @@ class BaseRSNN(nn.Module):
                     plot_fn=plot_histogram,
                     title=f"{new.output_group.name}",
                     xlabel="Synaptic time constant [s]",
+                )
+            )
+
+            self.model.add_monitor(
+                PlotPropertyMonitor(
+                    new.output_group,
+                    "tau_ada",
+                    plot_fn=plot_histogram,
+                    title=f"{new.output_group.name}",
+                    xlabel="Adaptive time constant [s]",
                 )
             )
 
@@ -248,6 +264,12 @@ class BaseRSNN(nn.Module):
                     "tau_syn",
                 )
             )
+            self.model.add_monitor(
+                SnapshotStatsMonitor(
+                    new.output_group,
+                    "tau_ada",
+                )
+            )
 
             self.model.add_monitor(
                 PlotPropertyMonitor(
@@ -266,6 +288,16 @@ class BaseRSNN(nn.Module):
                     plot_fn=plot_histogram,
                     title=f"{new.output_group.name}",
                     xlabel="Synaptic time constant [s]",
+                )
+            )
+
+            self.model.add_monitor(
+                PlotPropertyMonitor(
+                    new.output_group,
+                    "tau_ada",
+                    plot_fn=plot_histogram,
+                    title=f"{new.output_group.name}",
+                    xlabel="Adaptive time constant [s]",
                 )
             )
 
