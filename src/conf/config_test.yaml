@@ -1,5 +1,5 @@
 defaults:
-  - task: reacher
+  - task: franka
   - agent: pred_agent
   - policy: snn_policy
   - prediction: snn_prediction
@@ -17,7 +17,7 @@ model:
     dt: 0.002
     tau_mem: 0.01
     tau_mem_std: 0.0
-    tau_syn: 0.002
+    tau_syn: 0.005
     tau_syn_std: 0.0
     tau_ada: 0.1
     tau_ada_std: 0.0
@@ -29,7 +29,7 @@ model:
     mem_param: ${model.time.tau_param}
     syn_param: ${model.time.tau_param}
     ada_param: ${model.time.tau_param}
-    threshold_decay: 0
+    threshold_decay: 10
     threshold_xi: 0.05
   activation:
     type: gaussianspike # sigmoidspike  # should be gaussianspike with beta of 16
@@ -42,7 +42,7 @@ model:
     alpha: 0.9
     mu_u: 0.0
     sigma_u: 1.0
-    nu: 100  # should probably be 125
+    nu: 50  # should probably be 125
     bias_scale: 1.0
     bias_mean: 0.0
     scaling: 1
