@@ -659,7 +659,7 @@ class FrankaReachCustomEnv(DirectRLEnv):
             # reuse the test target positions and reset the joints to the default positions
             self.set_target_pos_to_test_target_pos(env_ids)
             self.reset_joints_to_test_start_pos(env_ids)
-            #self.reset_joints_to_default_pos(env_ids)
+            # self.reset_joints_to_default_pos(env_ids)
         else:
             # get random valid robot joint positions
             self.reset_joints_by_sampling_in_limits(env_ids)
@@ -1013,7 +1013,9 @@ class FrankaEnv(gym.Env):
         obs_indices += [28, 29, 30]
         self.obs_indices = torch.tensor(obs_indices)
 
-        self.observation_noise_std = torch.ones_like(obs_indices) * observation_noise_std
+        self.observation_noise_std = (
+            torch.ones_like(self.obs_indices) * observation_noise_std
+        )
 
         self.target_labels = [
             "hand x",
@@ -1037,16 +1039,15 @@ class FrankaEnv(gym.Env):
 
         return extras
 
-    def redo_obs(self, obs: dict):
+    def redo_obs(self, obs: dict, noise: bool = True):
         proprio_obs = obs["policy"][:, self.obs_indices]
         # add noise to the observations
-        noise = torch.normal(
-            mean=0.0,
-            std=self.observation_noise_std,
-            size=proprio_obs.shape,
-            device=proprio_obs.device,
-        )
-        proprio_obs += noise
+        if noise:
+            # on the very first call this will move std → cuda, then skip thereafter
+            if self.observation_noise_std.device != proprio_obs.device:
+                self.observation_noise_std = self.observation_noise_std.to(proprio_obs.device)
+            n = torch.randn_like(proprio_obs) * self.observation_noise_std
+            proprio_obs += n
         observations = {
             "proprio": proprio_obs,
             "target": obs["policy"][:, -3:],
@@ -1117,9 +1118,6 @@ def report_joint_details(articulation: Articulation):
         print("damping: ", current_damping)
         print("friction: ", current_friction)
         print("armature: ", current_armature)
-
-
-
 
 
 def main():
