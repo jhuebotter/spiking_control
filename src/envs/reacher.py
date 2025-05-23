@@ -30,6 +30,7 @@ class ReacherEnv(gym.Env):
         dt: float = 0.02,
         eval: bool = False,
         full_target_obs: bool = False,
+        observation_noise_std: float = 0.01,
         zoom: float = 1.0,
         control: str = "velocity",
         **kwargs
@@ -82,7 +83,7 @@ class ReacherEnv(gym.Env):
             n_obs = n_noise
 
         self.process_noise_std = np.array([0.0, 0.0, 0.0, 0.0])
-        self.observation_noise_std = np.ones(n_noise) * 0.01
+        self.observation_noise_std = np.ones(n_noise) * observation_noise_std
 
         self.action_space = spaces.Box(
             low=self.min_action, high=self.max_action, shape=(2,)

@@ -921,6 +921,7 @@ class FrankaEnv(gym.Env):
         include_velocity: bool = False,
         compute_velocity: bool = True,
         set_joint_velocity_target: bool = False,
+        observation_noise_std: float = 0.0,
         **kwargs,
     ) -> None:
         self.metadata = {
@@ -1012,6 +1013,8 @@ class FrankaEnv(gym.Env):
         obs_indices += [28, 29, 30]
         self.obs_indices = torch.tensor(obs_indices)
 
+        self.observation_noise_std = torch.ones_like(obs_indices) * observation_noise_std
+
         self.target_labels = [
             "hand x",
             "hand y",
@@ -1035,8 +1038,17 @@ class FrankaEnv(gym.Env):
         return extras
 
     def redo_obs(self, obs: dict):
+        proprio_obs = obs["policy"][:, self.obs_indices]
+        # add noise to the observations
+        noise = torch.normal(
+            mean=0.0,
+            std=self.observation_noise_std,
+            size=proprio_obs.shape,
+            device=proprio_obs.device,
+        )
+        proprio_obs += noise
         observations = {
-            "proprio": obs["policy"][:, self.obs_indices],
+            "proprio": proprio_obs,
             "target": obs["policy"][:, -3:],
         }
         return observations

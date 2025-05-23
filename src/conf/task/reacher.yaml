@@ -14,3 +14,4 @@ params:
   include_velocity: false
   delta_in_obs: false
   show_target_arm: false
+  observation_noise_std: 0.01
